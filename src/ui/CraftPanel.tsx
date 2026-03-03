@@ -32,11 +32,12 @@ export function CraftPanel({ state, dispatch }: Props) {
     inventoryForSlot2[slotA.ingredientName] -= 1;
   }
 
+  const brewStatus = getBrewStatus(state);
+  const isKnown = brewStatus?.type === 'known';
   const canCraft =
     slotA.ingredientName !== null &&
-    slotB.ingredientName !== null;
-
-  const brewStatus = getBrewStatus(state);
+    slotB.ingredientName !== null &&
+    !isKnown;
 
   // Count untried combos with slot 1's ingredient
   const untriedCount = slotA.ingredientName
@@ -66,7 +67,7 @@ export function CraftPanel({ state, dispatch }: Props) {
       {brewStatus && (
         <div className={`brew-status brew-status-${brewStatus.type}`}>
           {brewStatus.type === 'failed' && '⚠ Already tried → Soup'}
-          {brewStatus.type === 'known' && `✓ Known: ${brewStatus.name}`}
+          {brewStatus.type === 'known' && 'Known recipe — brew from Grimoire'}
         </div>
       )}
       <div className="craft-buttons">
@@ -133,12 +134,12 @@ function CraftSlot({
 /** Check if the current slot combo was already tried or is a known recipe. */
 function getBrewStatus(
   state: GameState,
-): { type: 'failed' } | { type: 'known'; name: string } | null {
+): { type: 'failed' } | { type: 'known' } | null {
   const [slotA, slotB] = state.craftSlots;
   if (!slotA.ingredientName || !slotB.ingredientName) return null;
 
   const recipe = findRecipe(state.recipes, slotA.ingredientName, slotB.ingredientName);
-  if (recipe?.discovered) return { type: 'known', name: recipe.name };
+  if (recipe?.discovered) return { type: 'known' };
 
   if (isFailedCombo(state, slotA.ingredientName, slotB.ingredientName)) {
     return { type: 'failed' };
