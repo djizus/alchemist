@@ -31,10 +31,11 @@ function loadSavedState(): GameState | null {
     ) {
       return null;
     }
-    // Migrate: add failedCombos if missing (old saves)
+    // Migrate: add missing fields from old saves
     return {
       ...parsed,
       failedCombos: Array.isArray(parsed.failedCombos) ? parsed.failedCombos : [],
+      hintedRecipeIds: Array.isArray(parsed.hintedRecipeIds) ? parsed.hintedRecipeIds : [],
     };
   } catch {
     return null;

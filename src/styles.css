@@ -1332,3 +1332,46 @@ body {
   font-size: 0.8rem;
   letter-spacing: 1px;
 }
+
+.btn-craft-next {
+  font-size: 0.85rem;
+  letter-spacing: 1px;
+  background: linear-gradient(135deg, #102030, #183848);
+  border-color: var(--accent-blue-dim);
+  color: var(--accent-blue);
+}
+
+.btn-craft-next:hover:not(:disabled) {
+  border-color: var(--accent-blue);
+  box-shadow: var(--shadow-glow-blue);
+}
+
+/* ─── Grimoire Hinted Entries ─── */
+
+.grimoire-entry.hinted {
+  background: rgba(160, 80, 208, 0.06);
+  border: 1px solid var(--accent-purple-dim);
+  font-size: 0.8rem;
+  font-style: italic;
+  color: var(--text-secondary);
+}
+
+/* ─── Buy Hint Button ─── */
+
+.btn-hint {
+  width: 100%;
+  margin-top: 10px;
+  font-family: var(--font-title);
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+  padding: 8px;
+  background: linear-gradient(135deg, #201030, #2a1840);
+  border-color: var(--accent-purple-dim);
+  color: var(--accent-purple);
+  text-transform: uppercase;
+}
+
+.btn-hint:hover:not(:disabled) {
+  border-color: var(--accent-purple);
+  box-shadow: var(--shadow-glow-purple);
+}

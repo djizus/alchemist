@@ -1,4 +1,5 @@
 import type { GameState, GameAction } from '../game/state';
+import { ingredientColor } from '../game/constants';
 
 interface Props {
   state: GameState;
@@ -57,7 +58,7 @@ export function InventoryPanel({ state, dispatch }: Props) {
           <div className="ingredient-list">
             {ingredients.map(([name, qty]) => (
               <div key={name} className="ingredient-item">
-                <span className="ingredient-name">{name}</span>
+                <span className="ingredient-name" style={{ color: ingredientColor(name) }}>{name}</span>
                 <span className="ingredient-qty">x{qty}</span>
               </div>
             ))}

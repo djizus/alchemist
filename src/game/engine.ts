@@ -4,12 +4,13 @@
 
 import {
   CRAFT_SLOTS,
-  GOLD_PER_POTION_DISCOVERY,
   HERO_BASE_HP,
   HERO_BASE_POWER,
   HERO_BASE_REGEN,
   HERO_COSTS,
   HERO_NAMES,
+  HINT_BASE_COST,
+  HINT_COST_MULTIPLIER,
   MAX_HEROES,
   PROGRESSIVE_CAP,
   PROGRESSIVE_EXPONENT,
@@ -52,6 +53,7 @@ export function createInitialState(seed: number): GameState {
     discoveredCount: 0,
     craftAttempts: 0,
     failedCombos: [],
+    hintedRecipeIds: [],
     notifications: [],
     nextNotificationId: 0,
     gameOver: false,
@@ -98,6 +100,10 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return handleCraftAll(state);
     case 'CRAFT_RECIPE':
       return handleCraftRecipe(state, action.recipeId);
+    case 'CRAFT_NEXT':
+      return handleCraftNext(state);
+    case 'BUY_HINT':
+      return handleBuyHint(state);
     case 'APPLY_POTION':
       return handleApplyPotion(state, action.potionIndex, action.heroId);
     case 'RECRUIT_HERO':
@@ -496,7 +502,6 @@ function handleCraft(state: GameState): GameState {
         discoveredCount: newCount,
         inventory: {
           ...s.inventory,
-          gold: s.inventory.gold + GOLD_PER_POTION_DISCOVERY,
           potions: [
             ...s.inventory.potions,
             { recipeId: recipe.id, name: recipe.name, effect: recipe.effect },
@@ -504,7 +509,7 @@ function handleCraft(state: GameState): GameState {
         },
         gameOver: newCount >= TOTAL_POTIONS,
       };
-      s = addNotification(s, `Discovered: ${recipe.name}! +${GOLD_PER_POTION_DISCOVERY}g`, 'discovery');
+      s = addNotification(s, `Discovered: ${recipe.name}!`, 'discovery');
     } else {
       // Already discovered — still produces a potion
       s = {
@@ -551,7 +556,7 @@ function handleCraft(state: GameState): GameState {
           discoveredCount: newCount,
           inventory: {
             ...s.inventory,
-            gold: s.inventory.gold + GOLD_PER_POTION_DISCOVERY + SOUP_GOLD_VALUE,
+            gold: s.inventory.gold + SOUP_GOLD_VALUE,
             potions: [
               ...s.inventory.potions,
               { recipeId: luckyRecipe.id, name: luckyRecipe.name, effect: luckyRecipe.effect },
@@ -559,7 +564,7 @@ function handleCraft(state: GameState): GameState {
           },
           gameOver: newCount >= TOTAL_POTIONS,
         };
-        s = addNotification(s, `Lucky discovery: ${luckyRecipe.name}! +${GOLD_PER_POTION_DISCOVERY}g`, 'discovery');
+        s = addNotification(s, `Lucky discovery: ${luckyRecipe.name}!`, 'discovery');
       }
     } else {
       // Failure → soup
@@ -651,6 +656,64 @@ function handleCraftRecipe(state: GameState, recipeId: number): GameState {
     s = addNotification(s, `Brewed ${brewed}x ${recipe.name}`, 'success');
   }
   return s;
+}
+
+/** Cycle to next untried combo with slot 1's ingredient and brew it. */
+function handleCraftNext(state: GameState): GameState {
+  const baseIngredient = state.craftSlots[0].ingredientName;
+  if (!baseIngredient) return state;
+
+  const currentPartner = state.craftSlots[1].ingredientName;
+  const inv = state.inventory.ingredients;
+  const candidates = Object.keys(inv).sort();
+
+  // Find the next untried partner after the current one
+  const startIdx = currentPartner ? candidates.indexOf(currentPartner) + 1 : 0;
+  const ordered = [...candidates.slice(startIdx), ...candidates.slice(0, startIdx)];
+
+  for (const partner of ordered) {
+    const baseQty = inv[baseIngredient] ?? 0;
+    if (baseQty < 1) break;
+
+    const needed = partner === baseIngredient ? 2 : 1;
+    if ((inv[partner] ?? 0) < needed) continue;
+
+    const recipe = findRecipe(state.recipes, baseIngredient, partner);
+    if (recipe?.discovered) continue;
+    if (isFailedCombo(state, baseIngredient, partner)) continue;
+
+    // Found next untried: set slot 2 and brew
+    let s: GameState = { ...state, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: partner }] };
+    s = handleCraft(s);
+    return s;
+  }
+
+  return addNotification(state, 'No more untried combos with this ingredient', 'info');
+}
+
+/** Buy a hint: reveal one ingredient of a random undiscovered recipe. */
+function handleBuyHint(state: GameState): GameState {
+  const unhinted = state.recipes.filter(r => !r.discovered && !state.hintedRecipeIds.includes(r.id));
+  if (unhinted.length === 0) return addNotification(state, 'No more recipes to hint!', 'info');
+
+  const cost = HINT_BASE_COST * Math.pow(HINT_COST_MULTIPLIER, state.hintedRecipeIds.length);
+  if (state.inventory.gold < cost) {
+    return addNotification(state, `Not enough gold! Hint costs ${cost}g`, 'danger');
+  }
+
+  // Pick a random undiscovered & unhinted recipe
+  const rng = createRng(state.seed ^ (state.hintedRecipeIds.length * 97));
+  const recipe = unhinted[Math.floor(rng() * unhinted.length)];
+
+  const s: GameState = {
+    ...state,
+    inventory: { ...state.inventory, gold: state.inventory.gold - cost },
+    hintedRecipeIds: [...state.hintedRecipeIds, recipe.id],
+  };
+
+  // Reveal one ingredient (always the first alphabetically for consistency)
+  const hint = recipe.ingredients[0];
+  return addNotification(s, `Hint: a recipe uses ${hint} (cost ${cost}g)`, 'discovery');
 }
 
 /** Progressive probability: prevents deadlocks as grimoire completion rises. */

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { GameState, GameAction, Recipe } from '../game/state';
-import { TOTAL_POTIONS } from '../game/constants';
+import { TOTAL_POTIONS, HINT_BASE_COST, HINT_COST_MULTIPLIER, ingredientColor } from '../game/constants';
 
 type EffectFilter = 'all' | 'max_hp' | 'power' | 'regen_speed';
 
@@ -35,6 +35,14 @@ export function GrimoirePanel({ state, dispatch }: Props) {
     if (aCraft !== bCraft) return bCraft - aCraft;
     return b.effect.value - a.effect.value;
   });
+
+  // Hinted recipes (undiscovered but with one ingredient revealed)
+  const hinted = state.recipes.filter(r => !r.discovered && state.hintedRecipeIds.includes(r.id));
+
+  // Hint cost
+  const nextHintCost = HINT_BASE_COST * Math.pow(HINT_COST_MULTIPLIER, state.hintedRecipeIds.length);
+  const canAffordHint = state.inventory.gold >= nextHintCost;
+  const hasUnhinted = state.recipes.some(r => !r.discovered && !state.hintedRecipeIds.includes(r.id));
 
   const handleRecipeClick = (ingredients: [string, string]) => {
     dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: ingredients[0] });
@@ -78,12 +86,14 @@ export function GrimoirePanel({ state, dispatch }: Props) {
               key={recipe.id}
               className={`grimoire-entry discovered${brewCount > 0 ? ' craftable' : ''}`}
               onClick={() => handleRecipeClick(recipe.ingredients)}
-              title={brewCount > 0 ? 'Ingredients available \u2014 click to auto-fill' : 'Click to auto-fill craft slots'}
+              title={brewCount > 0 ? 'Ingredients available — click to auto-fill' : 'Click to auto-fill craft slots'}
             >
               <div className="recipe-info">
                 <span className="recipe-name">{recipe.name}</span>
                 <span className="recipe-ingredients">
-                  {recipe.ingredients[0]} + {recipe.ingredients[1]}
+                  <span style={{ color: ingredientColor(recipe.ingredients[0]) }}>{recipe.ingredients[0]}</span>
+                  {' + '}
+                  <span style={{ color: ingredientColor(recipe.ingredients[1]) }}>{recipe.ingredients[1]}</span>
                 </span>
                 <span className="recipe-effect">
                   {formatEffect(recipe.effect.type, recipe.effect.value)}
@@ -104,12 +114,36 @@ export function GrimoirePanel({ state, dispatch }: Props) {
             </div>
           );
         })}
-        {filter === 'all' && Array.from({ length: undiscoveredCount }).map((_, i) => (
+
+        {/* Hinted recipes — show one ingredient */}
+        {filter === 'all' && hinted.map(recipe => (
+          <div key={recipe.id} className="grimoire-entry hinted">
+            <span className="recipe-ingredients">
+              <span style={{ color: ingredientColor(recipe.ingredients[0]) }}>{recipe.ingredients[0]}</span>
+              {' + ???'}
+            </span>
+          </div>
+        ))}
+
+        {/* Undiscovered (no hint) */}
+        {filter === 'all' && Array.from({ length: undiscoveredCount - hinted.length }).map((_, i) => (
           <div key={`undiscovered-${i}`} className="grimoire-entry undiscovered">
             ???
           </div>
         ))}
       </div>
+
+      {/* Buy Hint button */}
+      {filter === 'all' && undiscoveredCount > 0 && hasUnhinted && (
+        <button
+          className="btn btn-hint"
+          disabled={!canAffordHint}
+          onClick={() => dispatch({ type: 'BUY_HINT' })}
+          title={`Reveal one ingredient of a hidden recipe (${nextHintCost}g)`}
+        >
+          Buy Hint ({nextHintCost}g)
+        </button>
+      )}
 
       {filter === 'all' && state.failedCombos.length > 0 && (
         <div className="grimoire-failed-section">
@@ -125,7 +159,9 @@ export function GrimoirePanel({ state, dispatch }: Props) {
                 title="Click to retry"
               >
                 <span className="recipe-ingredients">
-                  {a} + {b}
+                  <span style={{ color: ingredientColor(a) }}>{a}</span>
+                  {' + '}
+                  <span style={{ color: ingredientColor(b) }}>{b}</span>
                 </span>
                 <span className="failed-result">→ Soup</span>
               </div>

@@ -90,6 +90,13 @@ ALL_INGREDIENTS.forEach((ing, i) => {
   INGREDIENT_TIER[ing] = ZONES[zoneIdx].rarity;
 });
 
+/** Get the zone CSS color for an ingredient. */
+export function ingredientColor(name: string): string {
+  const zoneIdx = INGREDIENT_ZONE[name];
+  if (zoneIdx === undefined) return '';
+  return ZONES[zoneIdx].colorCSS;
+}
+
 // Heroes
 export const HERO_NAMES = ['Alaric', 'Brynn', 'Cassiel'];
 export const HERO_COSTS = [0, 80, 200];
@@ -101,7 +108,7 @@ export const HERO_BASE_REGEN = 1; // HP/s when idle
 // Crafting
 export const CRAFT_SLOTS = 2;
 export const SOUP_GOLD_VALUE = 1;
-export const GOLD_PER_POTION_DISCOVERY = 15;
+// Removed: GOLD_PER_POTION_DISCOVERY (no gold on discovery)
 
 // Recipes
 export const TOTAL_POTIONS = 30;
@@ -117,6 +124,10 @@ export interface PotionEffect {
 export const PROGRESSIVE_EXPONENT = 3;
 export const PROGRESSIVE_CAP = 0.8;
 export const TOTAL_POSSIBLE_2_COMBOS = 325;
+
+// Hints
+export const HINT_BASE_COST = 10;       // First hint costs 10g
+export const HINT_COST_MULTIPLIER = 3;  // Each subsequent hint costs 3x more (10, 30, 90, 270, 810...)
 
 // Timing
 export const TICK_INTERVAL = 100;  // ms

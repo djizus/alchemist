@@ -109,6 +109,7 @@ export interface GameState {
   discoveredCount: number;    // how many recipes discovered
   craftAttempts: number;      // total craft attempts (for progressive probability)
   failedCombos: [string, string][];  // sorted ingredient pairs that produced soup
+  hintedRecipeIds: number[];       // recipe IDs where one ingredient has been revealed
 
   notifications: GameNotification[];
   nextNotificationId: number;
@@ -125,7 +126,9 @@ export type GameAction =
   | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
   | { type: 'CRAFT' }
   | { type: 'CRAFT_ALL' }
+  | { type: 'CRAFT_NEXT' }
   | { type: 'CRAFT_RECIPE'; recipeId: number }
+  | { type: 'BUY_HINT' }
   | { type: 'APPLY_POTION'; potionIndex: number; heroId: number }
   | { type: 'RECRUIT_HERO' }
   | { type: 'RESET'; seed: number }

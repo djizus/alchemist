@@ -1,5 +1,5 @@
 import type { GameState, GameAction } from '../game/state';
-import { ALL_INGREDIENTS } from '../game/constants';
+import { ALL_INGREDIENTS, ingredientColor } from '../game/constants';
 import { findRecipe } from '../game/recipes';
 import { isFailedCombo } from '../game/engine';
 
@@ -79,6 +79,14 @@ export function CraftPanel({ state, dispatch }: Props) {
         </button>
         {slotA.ingredientName && untriedCount > 0 && (
           <button
+            className="btn btn-craft btn-craft-next"
+            onClick={() => dispatch({ type: 'CRAFT_NEXT' })}
+          >
+            Next Untried ({untriedCount})
+          </button>
+        )}
+        {slotA.ingredientName && untriedCount > 0 && (
+          <button
             className="btn btn-craft btn-craft-all"
             onClick={() => dispatch({ type: 'CRAFT_ALL' })}
           >
@@ -113,7 +121,7 @@ function CraftSlot({
       >
         <option value="">— Select —</option>
         {available.map(name => (
-          <option key={name} value={name}>
+          <option key={name} value={name} style={{ color: ingredientColor(name) }}>
             {name} ({inventory[name] ?? 0})
           </option>
         ))}
