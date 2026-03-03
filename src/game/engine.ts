@@ -118,9 +118,10 @@ function handleTick(state: GameState, dt: number): GameState {
   let s = { ...state, tick: state.tick + 1, elapsedMs: state.elapsedMs + dt };
   s = { ...s, heroes: s.heroes.map(h => tickHero(h, s)) };
 
-  // Prune old notifications (keep last 10)
-  if (s.notifications.length > 10) {
-    s = { ...s, notifications: s.notifications.slice(-10) };
+  // Auto-dismiss notifications older than 5 seconds
+  const cutoff = s.elapsedMs - 5000;
+  if (s.notifications.length > 0 && s.notifications[0].timestamp < cutoff) {
+    s = { ...s, notifications: s.notifications.filter(n => n.timestamp >= cutoff) };
   }
 
   return s;
@@ -584,7 +585,7 @@ function handleCraft(state: GameState): GameState {
   }
 
   // Clear craft slots
-  s = { ...s, craftSlots: [{ ingredientName: null }, { ingredientName: null }] };
+  s = { ...s, craftSlots: [s.craftSlots[0], { ingredientName: null }] };
   return s;
 }
 
