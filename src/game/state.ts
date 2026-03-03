@@ -108,6 +108,7 @@ export interface GameState {
 
   discoveredCount: number;    // how many recipes discovered
   craftAttempts: number;      // total craft attempts (for progressive probability)
+  failedCombos: [string, string][];  // sorted ingredient pairs that produced soup
 
   notifications: GameNotification[];
   nextNotificationId: number;

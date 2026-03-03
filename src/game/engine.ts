@@ -51,6 +51,7 @@ export function createInitialState(seed: number): GameState {
     craftSlots: [{ ingredientName: null }, { ingredientName: null }],
     discoveredCount: 0,
     craftAttempts: 0,
+    failedCombos: [],
     notifications: [],
     nextNotificationId: 0,
     gameOver: false,
@@ -437,6 +438,12 @@ export function hasPendingLoot(hero: Hero): boolean {
   return hero.pendingLoot.gold > 0 || Object.keys(hero.pendingLoot.ingredients).length > 0;
 }
 
+/** Check if an ingredient combo was already tried and failed. */
+export function isFailedCombo(state: GameState, a: string, b: string): boolean {
+  const [x, y] = a < b ? [a, b] : [b, a];
+  return state.failedCombos.some(([fa, fb]) => fa === x && fb === y);
+}
+
 // ─── CRAFTING ───
 
 function handleSetCraftSlot(
@@ -525,7 +532,18 @@ function handleCraft(state: GameState): GameState {
       s = addNotification(s, `Brewed: ${recipe.name}`, 'success');
     }
   } else {
-    // No recipe match → check progressive probability for "lucky" discovery
+    // No recipe match → record the failed combo
+    const sortedPair: [string, string] = slotA.ingredientName < slotB.ingredientName
+      ? [slotA.ingredientName, slotB.ingredientName]
+      : [slotB.ingredientName, slotA.ingredientName];
+    const alreadyFailed = s.failedCombos.some(
+      ([a, b]) => a === sortedPair[0] && b === sortedPair[1],
+    );
+    if (!alreadyFailed) {
+      s = { ...s, failedCombos: [...s.failedCombos, sortedPair] };
+    }
+
+    // Check progressive probability for "lucky" discovery
     const rng = createRng(s.seed ^ s.craftAttempts);
     const progressiveChance = calculateProgressiveChance(s);
 

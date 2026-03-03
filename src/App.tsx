@@ -32,7 +32,7 @@ export function App() {
         <div className="column column-right">
           <CraftPanel state={state} dispatch={dispatch} />
           <InventoryPanel state={state} dispatch={dispatch} />
-          <GrimoirePanel state={state} />
+          <GrimoirePanel state={state} dispatch={dispatch} />
         </div>
       </div>
 

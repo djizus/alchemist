@@ -757,6 +757,26 @@ body {
   padding-bottom: 6px;
 }
 
+.brew-status {
+  font-size: 0.75rem;
+  padding: 6px 10px;
+  margin-top: 8px;
+  border-radius: var(--radius-sm);
+  text-align: center;
+}
+
+.brew-status-failed {
+  color: var(--accent-red);
+  background: rgba(208, 64, 80, 0.08);
+  border: 1px solid var(--accent-red-dim);
+}
+
+.brew-status-known {
+  color: var(--accent-green);
+  background: rgba(64, 192, 96, 0.08);
+  border: 1px solid var(--accent-green-dim);
+}
+
 /* ─── Grimoire Panel ─── */
 
 .grimoire-panel .panel-title {
@@ -802,7 +822,7 @@ body {
 .grimoire-entry.discovered {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
-  cursor: default;
+  cursor: pointer;
 }
 
 .grimoire-entry.discovered:hover {
@@ -818,6 +838,32 @@ body {
   border: 1px solid transparent;
   padding: 4px;
   font-size: 0.7rem;
+}
+
+.grimoire-entry.failed {
+  background: rgba(208, 64, 80, 0.06);
+  border: 1px solid var(--accent-red-dim);
+  cursor: pointer;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.grimoire-entry.failed:hover {
+  border-color: var(--accent-red);
+  background: rgba(208, 64, 80, 0.1);
+}
+
+.failed-result {
+  font-size: 0.7rem;
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+.grimoire-failed-section {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-color);
 }
 
 .recipe-name {

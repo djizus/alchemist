@@ -1,14 +1,20 @@
-import type { GameState } from '../game/state';
+import type { GameState, GameAction } from '../game/state';
 import { TOTAL_POTIONS } from '../game/constants';
 
 interface Props {
   state: GameState;
+  dispatch: (action: GameAction) => void;
 }
 
-export function GrimoirePanel({ state }: Props) {
+export function GrimoirePanel({ state, dispatch }: Props) {
   const discovered = state.recipes.filter(r => r.discovered);
   const undiscoveredCount = TOTAL_POTIONS - discovered.length;
   const progressPct = (discovered.length / TOTAL_POTIONS) * 100;
+
+  const handleRecipeClick = (ingredients: [string, string]) => {
+    dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: ingredients[0] });
+    dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 1, ingredientName: ingredients[1] });
+  };
 
   return (
     <section className="panel grimoire-panel">
@@ -23,7 +29,12 @@ export function GrimoirePanel({ state }: Props) {
       </h2>
       <div className="grimoire-grid">
         {discovered.map(recipe => (
-          <div key={recipe.id} className="grimoire-entry discovered">
+          <div
+            key={recipe.id}
+            className="grimoire-entry discovered"
+            onClick={() => handleRecipeClick(recipe.ingredients)}
+            title="Click to auto-fill craft slots"
+          >
             <span className="recipe-name">{recipe.name}</span>
             <span className="recipe-ingredients">
               {recipe.ingredients[0]} + {recipe.ingredients[1]}
@@ -39,6 +50,29 @@ export function GrimoirePanel({ state }: Props) {
           </div>
         ))}
       </div>
+
+      {state.failedCombos.length > 0 && (
+        <div className="grimoire-failed-section">
+          <h3 className="inventory-subtitle">
+            Failed Brews ({state.failedCombos.length})
+          </h3>
+          <div className="grimoire-grid">
+            {state.failedCombos.map(([a, b], i) => (
+              <div
+                key={i}
+                className="grimoire-entry failed"
+                onClick={() => handleRecipeClick([a, b])}
+                title="Click to retry"
+              >
+                <span className="recipe-ingredients">
+                  {a} + {b}
+                </span>
+                <span className="failed-result">→ Soup</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </section>
   );
 }

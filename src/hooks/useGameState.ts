@@ -31,7 +31,11 @@ function loadSavedState(): GameState | null {
     ) {
       return null;
     }
-    return parsed;
+    // Migrate: add failedCombos if missing (old saves)
+    return {
+      ...parsed,
+      failedCombos: Array.isArray(parsed.failedCombos) ? parsed.failedCombos : [],
+    };
   } catch {
     return null;
   }
