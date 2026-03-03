@@ -94,14 +94,6 @@ export function HeroPanel({ state, dispatch }: Props) {
                     Claim Yield
                   </button>
                 )}
-                {hero.status === 'exploring' && (
-                  <button
-                    className="btn btn-warning"
-                    onClick={() => dispatch({ type: 'RECALL_HERO', heroId: hero.id })}
-                  >
-                    Recall
-                  </button>
-                )}
                 {hero.status === 'returning' && (
                   <span className="returning-label">Heading home...</span>
                 )}

@@ -121,7 +121,6 @@ export interface GameState {
 export type GameAction =
   | { type: 'TICK'; dt: number }
   | { type: 'SEND_EXPEDITION'; heroId: number }
-  | { type: 'RECALL_HERO'; heroId: number }
   | { type: 'CLAIM_LOOT'; heroId: number }
   | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
   | { type: 'CRAFT' }

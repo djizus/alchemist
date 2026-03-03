@@ -88,8 +88,6 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return handleTick(state, action.dt);
     case 'SEND_EXPEDITION':
       return handleSendExpedition(state, action.heroId);
-    case 'RECALL_HERO':
-      return handleRecallHero(state, action.heroId);
     case 'CLAIM_LOOT':
       return handleClaimLoot(state, action.heroId);
     case 'SET_CRAFT_SLOT':
@@ -382,21 +380,6 @@ function handleSendExpedition(state: GameState, heroId: number): GameState {
   return addNotification(s, `${hero.name} sets out exploring!`, 'info');
 }
 
-// ─── RECALL HERO ───
-
-function handleRecallHero(state: GameState, heroId: number): GameState {
-  const hero = state.heroes.find(h => h.id === heroId);
-  if (!hero || hero.status !== 'exploring') return state;
-
-  const s: GameState = {
-    ...state,
-    heroes: state.heroes.map(h =>
-      h.id === heroId ? startReturnJourney(h) : h,
-    ),
-  };
-
-  return addNotification(s, `${hero.name} is heading home...`, 'info');
-}
 
 // ─── CLAIM LOOT ───
 
