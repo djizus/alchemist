@@ -648,7 +648,7 @@ function handleCraftRecipe(state: GameState, recipeId: number): GameState {
   }
 
   if (brewed > 0) {
-    s = addNotification(s, `Brewed ${brewed}× ${recipe.name}`, 'success');
+    s = addNotification(s, `Brewed ${brewed}x ${recipe.name}`, 'success');
   }
   return s;
 }
