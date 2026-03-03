@@ -31,6 +31,11 @@ import type {
   PendingLoot,
 } from './state';
 
+// ─── Constants ───
+
+/** Return journey speed: hero returns at 2× the speed they explored. */
+const RETURN_SPEED_MULTIPLIER = 2;
+
 // ─── State Factory ───
 
 export function createInitialState(seed: number): GameState {
@@ -67,7 +72,8 @@ function createHero(id: number): Hero {
     pendingLoot: { gold: 0, ingredients: {} },
     eventLog: [],
     lastEventTime: 0,
-    deathTimer: 0,
+    returnTimer: 0,
+    returnTimerMax: 0,
   };
 }
 
@@ -83,12 +89,12 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return handleSendExpedition(state, action.heroId);
     case 'RECALL_HERO':
       return handleRecallHero(state, action.heroId);
+    case 'CLAIM_LOOT':
+      return handleClaimLoot(state, action.heroId);
     case 'SET_CRAFT_SLOT':
       return handleSetCraftSlot(state, action.slotIndex, action.ingredientName);
     case 'CRAFT':
       return handleCraft(state);
-    case 'SELL_SOUP':
-      return handleSellSoup(state);
     case 'APPLY_POTION':
       return handleApplyPotion(state, action.potionIndex, action.heroId);
     case 'RECRUIT_HERO':
@@ -120,35 +126,25 @@ function handleTick(state: GameState, dt: number): GameState {
 }
 
 function tickHero(hero: Hero, state: GameState): Hero {
-  if (hero.status === 'idle') {
-    return tickIdleHero(hero);
+  switch (hero.status) {
+    case 'idle':
+      return tickIdleHero(hero);
+    case 'exploring':
+      return tickExploringHero(hero, state);
+    case 'returning':
+      return tickReturningHero(hero);
+    default:
+      return hero;
   }
-  if (hero.status === 'exploring') {
-    return tickExploringHero(hero, state);
-  }
-  return hero; // dead heroes handled elsewhere (deathTimer in idle tick)
 }
 
 function tickIdleHero(hero: Hero): Hero {
-  // Regen HP when idle
-  if (hero.hp >= hero.stats.maxHp && hero.deathTimer <= 0) return hero;
+  // Regen HP when idle (and not at full HP)
+  if (hero.hp >= hero.stats.maxHp) return hero;
 
-  let h = { ...hero };
-
-  // Death timer countdown
-  if (h.deathTimer > 0) {
-    h.deathTimer = Math.max(0, h.deathTimer - TICK_INTERVAL / 1000);
-    if (h.deathTimer <= 0) {
-      h.hp = h.stats.maxHp;
-      h.status = 'idle';
-    }
-    return h;
-  }
-
-  // Regen: regenPerSec * (TICK_INTERVAL / 1000)
-  const regenAmount = h.stats.regenPerSec * (TICK_INTERVAL / 1000);
-  h.hp = Math.min(h.stats.maxHp, h.hp + regenAmount);
-  return h;
+  const regenAmount = hero.stats.regenPerSec * (TICK_INTERVAL / 1000);
+  const newHp = Math.min(hero.stats.maxHp, hero.hp + regenAmount);
+  return { ...hero, hp: newHp };
 }
 
 function tickExploringHero(hero: Hero, state: GameState): Hero {
@@ -158,15 +154,20 @@ function tickExploringHero(hero: Hero, state: GameState): Hero {
   // Advance depth (depth = seconds explored, tick = 100ms → add 0.1s per tick)
   h.depth += TICK_INTERVAL / 1000;
 
+  // ── Zone HP drain: 1 HP × (zoneIndex + 1) per second ──
+  const zone = getCurrentZone(h.depth);
+  const drainPerSecond = zone.id + 1; // Zone D=1, C=2, B=3, A=4, S=5
+  const drainThisTick = drainPerSecond * (TICK_INTERVAL / 1000);
+  h.hp = Math.max(0, h.hp - drainThisTick);
+
   // Check for events every 1 second
-  const prevSecond = Math.floor((h.depth - TICK_INTERVAL / 1000));
+  const prevSecond = Math.floor(h.depth - TICK_INTERVAL / 1000);
   const currSecond = Math.floor(h.depth);
   if (currSecond > prevSecond && currSecond > 0) {
-    const zone = getCurrentZone(h.depth);
     const event = rollExplorationEvent(rng, zone, h);
 
     if (event) {
-      h = applyExplorationEvent(h, event, rng, zone);
+      h = applyExplorationEvent(h, event);
       h.eventLog = [...h.eventLog, event];
     }
 
@@ -190,15 +191,42 @@ function tickExploringHero(hero: Hero, state: GameState): Hero {
     }
   }
 
-  // Check if hero died (HP <= 0) → retreat with loot
+  // Check if hero died (HP <= 0) → start return journey
   if (h.hp <= 0) {
     h.hp = 0;
-    h.status = 'idle';
-    // Loot is collected in handleHeroReturn (called by the component or tick)
-    return heroReturnsHome(h);
+    return startReturnJourney(h);
   }
 
   return h;
+}
+
+/** Tick a returning hero — countdown return timer. */
+function tickReturningHero(hero: Hero): Hero {
+  const dt = TICK_INTERVAL / 1000;
+  const newTimer = Math.max(0, hero.returnTimer - dt);
+
+  if (newTimer <= 0) {
+    // Arrived home — switch to idle, keep pendingLoot for claiming
+    return {
+      ...hero,
+      status: 'idle',
+      returnTimer: 0,
+      depth: 0,
+    };
+  }
+
+  return { ...hero, returnTimer: newTimer };
+}
+
+/** Start the return journey — hero travels back at 2× speed. */
+function startReturnJourney(hero: Hero): Hero {
+  const travelTime = Math.max(1, hero.depth / RETURN_SPEED_MULTIPLIER);
+  return {
+    ...hero,
+    status: 'returning',
+    returnTimer: travelTime,
+    returnTimerMax: travelTime,
+  };
 }
 
 /** Get the current zone based on exploration depth. */
@@ -292,12 +320,7 @@ function rollExplorationEvent(
 }
 
 /** Apply an exploration event to the hero. */
-function applyExplorationEvent(
-  hero: Hero,
-  event: ExplorationEvent,
-  _rng: Rng,
-  _zone: ZoneData,
-): Hero {
+function applyExplorationEvent(hero: Hero, event: ExplorationEvent): Hero {
   let h = { ...hero };
 
   switch (event.kind) {
@@ -311,7 +334,7 @@ function applyExplorationEvent(
       h.hp = Math.min(h.stats.maxHp, h.hp + event.value);
       break;
     case 'beast_win':
-      // Some damage taken from combat (10-30% of beast power)
+      // Minor damage from combat + gold loot
       h.pendingLoot = { ...h.pendingLoot, gold: h.pendingLoot.gold + event.value };
       h.hp = Math.max(0, h.hp - Math.floor(event.value * 0.2));
       break;
@@ -323,29 +346,18 @@ function applyExplorationEvent(
   return h;
 }
 
-/** Hero returns home: transfer loot to a "ready to collect" state. */
-function heroReturnsHome(hero: Hero): Hero {
-  return {
-    ...hero,
-    status: 'idle',
-    depth: 0,
-    lastEventTime: 0,
-    // Keep pendingLoot — it gets collected when processed
-  };
-}
-
 // ─── SEND EXPEDITION ───
 
 function handleSendExpedition(state: GameState, heroId: number): GameState {
   const hero = state.heroes.find(h => h.id === heroId);
-  if (!hero || hero.status !== 'idle' || hero.hp <= 0 || hero.deathTimer > 0) return state;
+  if (!hero || hero.status !== 'idle' || hero.hp <= 0) return state;
 
-  // First, collect any pending loot from previous expedition
-  let s = collectPendingLoot(state, heroId);
+  // Must have claimed any previous loot
+  if (hasPendingLoot(hero)) return state;
 
-  s = {
-    ...s,
-    heroes: s.heroes.map(h =>
+  const s: GameState = {
+    ...state,
+    heroes: state.heroes.map(h =>
       h.id === heroId
         ? {
             ...h,
@@ -354,6 +366,8 @@ function handleSendExpedition(state: GameState, heroId: number): GameState {
             pendingLoot: { gold: 0, ingredients: {} },
             eventLog: [],
             lastEventTime: 0,
+            returnTimer: 0,
+            returnTimerMax: 0,
           }
         : h,
     ),
@@ -368,26 +382,24 @@ function handleRecallHero(state: GameState, heroId: number): GameState {
   const hero = state.heroes.find(h => h.id === heroId);
   if (!hero || hero.status !== 'exploring') return state;
 
-  let s = {
+  const s: GameState = {
     ...state,
     heroes: state.heroes.map(h =>
-      h.id === heroId ? heroReturnsHome(h) : h,
+      h.id === heroId ? startReturnJourney(h) : h,
     ),
   };
 
-  s = collectPendingLoot(s, heroId);
-  return addNotification(s, `${hero.name} returns home with loot!`, 'info');
+  return addNotification(s, `${hero.name} is heading home...`, 'info');
 }
 
-// ─── COLLECT PENDING LOOT ───
+// ─── CLAIM LOOT ───
 
-function collectPendingLoot(state: GameState, heroId: number): GameState {
+function handleClaimLoot(state: GameState, heroId: number): GameState {
   const hero = state.heroes.find(h => h.id === heroId);
-  if (!hero) return state;
+  if (!hero || hero.status !== 'idle') return state;
+  if (!hasPendingLoot(hero)) return state;
 
   const loot = hero.pendingLoot;
-  if (loot.gold === 0 && Object.keys(loot.ingredients).length === 0) return state;
-
   const newInventory = { ...state.inventory };
   newInventory.gold += loot.gold;
 
@@ -397,15 +409,32 @@ function collectPendingLoot(state: GameState, heroId: number): GameState {
   }
   newInventory.ingredients = newIngredients;
 
-  return {
+  const ingredientCount = Object.values(loot.ingredients).reduce((s, q) => s + q, 0);
+  const lootSummary = [
+    loot.gold > 0 ? `${loot.gold}g` : '',
+    ingredientCount > 0 ? `${ingredientCount} ingredients` : '',
+  ].filter(Boolean).join(', ');
+
+  let s: GameState = {
     ...state,
     inventory: newInventory,
     heroes: state.heroes.map(h =>
       h.id === heroId
-        ? { ...h, pendingLoot: { gold: 0, ingredients: {} } as PendingLoot }
+        ? {
+            ...h,
+            pendingLoot: { gold: 0, ingredients: {} } as PendingLoot,
+            eventLog: [],
+          }
         : h,
     ),
   };
+
+  return addNotification(s, `${hero.name}'s yield collected: ${lootSummary}`, 'gold');
+}
+
+/** Check if a hero has unclaimed loot. */
+export function hasPendingLoot(hero: Hero): boolean {
+  return hero.pendingLoot.gold > 0 || Object.keys(hero.pendingLoot.ingredients).length > 0;
 }
 
 // ─── CRAFTING ───
@@ -547,18 +576,10 @@ function calculateProgressiveChance(state: GameState): number {
   const remaining = TOTAL_POTIONS - state.discoveredCount;
   const remainingCombos = TOTAL_POSSIBLE_2_COMBOS - state.craftAttempts;
 
-  // As more recipes are discovered and attempts increase, chance rises
   if (remaining <= 0) return 0;
   const base = Math.pow(completion, PROGRESSIVE_EXPONENT);
   const attemptFactor = Math.max(0, 1 - remainingCombos / TOTAL_POSSIBLE_2_COMBOS);
   return Math.min(PROGRESSIVE_CAP, base * 0.3 + attemptFactor * 0.2);
-}
-
-// ─── SELL SOUP ───
-
-function handleSellSoup(state: GameState): GameState {
-  // Soup is auto-sold during crafting, this is a no-op but kept for action parity
-  return state;
 }
 
 // ─── APPLY POTION ───

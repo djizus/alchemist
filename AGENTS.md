@@ -6,7 +6,7 @@ Alchemist is a competitive grimoire-completion race game. Players send heroes on
 
 ## Tech Stack
 
-- **Runtime**: TypeScript, React 19, Phaser 3, Vite
+- **Runtime**: TypeScript, React 19, Vite
 - **Package Manager**: pnpm
 - **Target**: V1 will be Starknet (Cairo smart contracts) + client
 
@@ -14,10 +14,10 @@ Alchemist is a competitive grimoire-completion race game. Players send heroes on
 
 ### State Ownership
 
-React owns all game state via `useReducer` in `src/hooks/useGameState.ts`. Phaser is a **pure renderer** — reads state from a shared ref, never mutates it.
+React owns all game state via `useReducer` in `src/hooks/useGameState.ts`. UI is pure React — reads state, dispatches actions. State is persisted to localStorage.
 
 ```
-React (state + logic) --ref--> Phaser (render only)
+React (state + logic) → UI (render only)
        |
        └── dispatch(action)
 ```
@@ -26,8 +26,7 @@ React (state + logic) --ref--> Phaser (render only)
 
 | Directory | Purpose | Rules |
 |-----------|---------|-------|
-| `src/game/` | Pure game logic | No React, no Phaser, no DOM. Pure functions + types. |
-| `src/phaser/` | Rendering layer | Read-only. Never mutate game state. |
+| `src/game/` | Pure game logic | No React, no DOM. Pure functions + types. |
 | `src/ui/` | React UI components | Pure presentational. Props in, JSX out. No state hooks. |
 | `src/hooks/` | React hooks | State management + game loop. |
 
@@ -40,9 +39,7 @@ React (state + logic) --ref--> Phaser (render only)
 | `src/game/recipes.ts` | Deterministic 30-recipe generation from seed (all 2-ingredient) |
 | `src/game/rng.ts` | Mulberry32 seeded RNG + helpers (randInt, randPick, shuffle) |
 | `src/game/state.ts` | All TypeScript interfaces (GameState, Hero, Recipe, ExplorationEvent, etc.) |
-| `src/phaser/AlchemistScene.ts` | Zone track visualization, hero sprites, HP bars |
-| `src/phaser/PhaserContainer.tsx` | React ↔ Phaser bridge component |
-| `src/App.tsx` | Root component, wires state to Phaser + UI |
+| `src/App.tsx` | Root component, wires state to UI |
 
 ## Game Mechanics (Quick Reference)
 
@@ -100,7 +97,7 @@ Discover all 30 recipes in the grimoire.
 
 - **No `as any`** or `@ts-ignore`. Strict TypeScript.
 - **Game logic in `src/game/`** — keep it framework-agnostic for V1 Cairo port.
-- **Phaser is render-only** — never dispatch actions from Phaser scene.
+- **UI components are stateless** — props in, JSX out.
 - **UI components are stateless** — props in, JSX out.
 - **All constants in `constants.ts`** — single source for balancing levers.
 - **Seeded RNG everywhere** — `createRng(seed)` for determinism.

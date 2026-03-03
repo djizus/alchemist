@@ -1,5 +1,5 @@
 // ═══════════════════════════════════════════════
-// App — Root component, wires state → UI + Phaser
+// App — Root component, wires state → UI
 // ═══════════════════════════════════════════════
 
 import { useGameState } from './hooks/useGameState';
@@ -13,10 +13,9 @@ import { InventoryPanel } from './ui/InventoryPanel';
 import { EventLog } from './ui/EventLog';
 import { Notifications } from './ui/Notifications';
 import { WinOverlay } from './ui/WinOverlay';
-import { PhaserContainer } from './phaser/PhaserContainer';
 
 export function App() {
-  const { state, dispatch, stateRef, reset } = useGameState();
+  const { state, dispatch, reset } = useGameState();
   useGameLoop(dispatch);
 
   return (
@@ -24,23 +23,19 @@ export function App() {
       <TopBar state={state} onReset={reset} />
 
       <div className="main-layout">
-        <div className="left-column">
+        <div className="column column-left">
           <HeroPanel state={state} dispatch={dispatch} />
           <ExplorationPanel state={state} dispatch={dispatch} />
+          <EventLog state={state} />
         </div>
 
-        <div className="center-column">
-          <PhaserContainer stateRef={stateRef} />
-        </div>
-
-        <div className="right-column">
+        <div className="column column-right">
           <CraftPanel state={state} dispatch={dispatch} />
           <InventoryPanel state={state} dispatch={dispatch} />
           <GrimoirePanel state={state} />
         </div>
       </div>
 
-      <EventLog state={state} />
       <Notifications state={state} dispatch={dispatch} />
       {state.gameOver && <WinOverlay state={state} onReset={reset} />}
     </div>

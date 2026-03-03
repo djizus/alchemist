@@ -69,15 +69,14 @@ body {
 
 .main-layout {
   display: grid;
-  grid-template-columns: 300px 1fr 330px;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 16px;
   flex: 1;
   overflow: hidden;
   padding: 16px 0;
 }
 
-.left-column,
-.right-column {
+.column {
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -85,11 +84,8 @@ body {
   padding-right: 4px;
 }
 
-.center-column {
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-}
+.column-left {}
+.column-right {}
 
 /* ─── Top Bar ─── */
 
@@ -328,6 +324,16 @@ body {
   box-shadow: var(--shadow-glow-blue);
 }
 
+.btn-gold {
+  background: linear-gradient(135deg, #302810, #3a3018);
+  border-color: var(--accent-gold-dim);
+  color: var(--accent-gold);
+}
+
+.btn-gold:hover:not(:disabled) {
+  border-color: var(--accent-gold);
+  box-shadow: var(--shadow-glow-gold);
+}
 /* ─── Hero Panel ─── */
 
 .hero-list {
@@ -464,15 +470,43 @@ body {
   margin-top: 4px;
 }
 
-.death-timer {
-  font-size: 0.75rem;
-  color: var(--accent-red);
-  animation: fadeInOut 2s ease-in-out infinite;
+/* Hero returning state */
+.hero-card.hero-returning {
+  border-color: var(--accent-gold-dim);
+  box-shadow: var(--shadow-glow-gold);
+  animation: returningPulse 3s ease-in-out infinite;
 }
 
-@keyframes fadeInOut {
-  0%, 100% { opacity: 0.6; }
-  50% { opacity: 1; }
+@keyframes returningPulse {
+  0%, 100% { box-shadow: 0 0 8px rgba(240, 192, 64, 0.1); }
+  50% { box-shadow: 0 0 16px rgba(240, 192, 64, 0.25); }
+}
+
+.hero-returning .hero-status {
+  color: var(--accent-gold);
+  background: rgba(240, 192, 64, 0.1);
+}
+
+.return-bar {}
+
+.return-fill {
+  background: linear-gradient(90deg, #806020, #d0a040) !important;
+}
+
+.returning-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.hero-loot-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 0.7rem;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.04);
 }
 
 /* ─── Exploration Panel ─── */
@@ -589,6 +623,74 @@ body {
 @keyframes eventFadeIn {
   from { opacity: 0; transform: translateY(-4px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* ─── Zone Info Grid (no heroes exploring) ─── */
+
+.zone-info-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.zone-info-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: 8px 6px;
+  background: var(--bg-card);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  font-size: 0.75rem;
+  transition: border-color var(--transition-fast);
+}
+
+.zone-info-card:hover {
+  border-color: var(--border-glow);
+}
+
+.zone-info-tier {
+  font-family: var(--font-title);
+  font-weight: 700;
+  font-size: 0.9rem;
+}
+
+.zone-info-name {
+  color: var(--text-secondary);
+  font-size: 0.7rem;
+}
+
+.zone-info-drain {
+  color: var(--accent-red);
+  font-size: 0.65rem;
+  font-weight: 600;
+}
+
+/* ─── Zone Drain Info (during exploration) ─── */
+
+.zone-drain-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.7rem;
+  margin-bottom: 6px;
+}
+
+.drain-label {
+  color: var(--text-muted);
+}
+
+.drain-value {
+  color: var(--accent-red);
+  font-weight: 600;
+}
+
+.next-zone-info {
+  color: var(--text-muted);
+  font-size: 0.65rem;
+  margin-left: auto;
 }
 
 /* ─── Craft Panel ─── */
@@ -840,26 +942,28 @@ body {
 
 /* ─── Event Log ─── */
 
-.event-log {
-  padding: 8px 0;
-  border-top: 1px solid var(--border-color);
+.event-log-panel {
+  /* Inherits .panel via className */
+}
+
+.event-log-list {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  font-size: 0.7rem;
-  max-height: 56px;
-  overflow: hidden;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 200px;
+  overflow-y: auto;
+  padding-right: 4px;
 }
 
 .event-entry {
   display: flex;
   gap: 5px;
-  padding: 3px 10px;
-  border-radius: 12px;
+  padding: 4px 10px;
+  border-radius: var(--radius-sm);
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   animation: eventPop 0.3s ease;
-  white-space: nowrap;
+  font-size: 0.75rem;
 }
 
 @keyframes eventPop {
@@ -1044,15 +1148,6 @@ body {
   margin-top: 24px;
   font-size: 1rem;
   padding: 12px 32px;
-}
-
-/* ─── Phaser Container ─── */
-
-.phaser-container {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  overflow: hidden;
-  box-shadow: var(--shadow-md);
 }
 
 /* ─── Empty States ─── */

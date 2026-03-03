@@ -6,7 +6,7 @@ Fully onchain competitive grimoire race on Starknet. Send heroes on expeditions 
 
 Playable browser prototype validating the core game loop before smart contract work.
 
-- **Stack**: React 19 + Phaser 3 + TypeScript + Vite
+- **Stack**: React 19 + TypeScript + Vite
 - **Multiplayer**: None (solo play)
 - **Goal**: Prove the loop is fun, tune balancing
 
@@ -45,9 +45,6 @@ src/
 │   ├── recipes.ts      # Deterministic 30-recipe generation
 │   ├── state.ts        # TypeScript interfaces
 │   └── engine.ts       # Game reducer (tick, explore, craft, potions)
-├── phaser/         # Phaser 3 rendering (read-only, no state mutation)
-│   ├── AlchemistScene.ts
-│   └── PhaserContainer.tsx
 ├── ui/             # React components (pure presentational)
 │   ├── TopBar.tsx
 │   ├── HeroPanel.tsx
@@ -68,12 +65,12 @@ src/
 
 ### Architecture
 
-React owns all game state via `useReducer`. Phaser is a pure renderer — reads state from a shared ref, never mutates it. Game tick runs every 100ms, exploration events fire every 1 second.
+React owns all game state via `useReducer`. UI is pure React (no game engine). Game tick runs every 100ms, exploration events fire every 1 second. State is persisted to localStorage.
 
 ```
-React (state + logic) --ref--> Phaser (render only)
+React (state + logic) → UI (render only)
        |
-       └── dispatch(action) -- TICK | SEND_EXPEDITION | RECALL_HERO | CRAFT | APPLY_POTION | RECRUIT_HERO | RESET
+       └── dispatch(action) -- TICK | SEND_EXPEDITION | RECALL_HERO | CLAIM_LOOT | CRAFT | APPLY_POTION | RECRUIT_HERO | RESET
 ```
 
 ### Key Design Decisions

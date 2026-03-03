@@ -2,7 +2,7 @@
 // GAME STATE — All TypeScript interfaces
 // ═══════════════════════════════════════════════
 
-import type { PotionEffect, PotionEffectType } from './constants';
+import type { PotionEffect } from './constants';
 
 // ─── Exploration Events ───
 
@@ -25,7 +25,7 @@ export interface ExplorationEvent {
 
 // ─── Hero ───
 
-export type HeroStatus = 'idle' | 'exploring' | 'dead';
+export type HeroStatus = 'idle' | 'exploring' | 'returning';
 
 export interface HeroStats {
   maxHp: number;
@@ -49,8 +49,9 @@ export interface Hero {
   pendingLoot: PendingLoot;
   eventLog: ExplorationEvent[];    // events from current expedition
   lastEventTime: number;           // ms timestamp of last event roll
-  // Death cooldown
-  deathTimer: number;              // seconds remaining until revive (0 = alive)
+  // Return journey (active when status === 'returning')
+  returnTimer: number;             // seconds remaining until home (based on depth reached)
+  returnTimerMax: number;          // total return time (for progress bar)
 }
 
 // ─── Recipes & Potions ───
@@ -73,12 +74,6 @@ export interface PotionItem {
 
 export interface CraftSlot {
   ingredientName: string | null;
-}
-
-export interface CraftResult {
-  success: boolean;
-  potionName: string | null;   // null if soup
-  isNewDiscovery: boolean;
 }
 
 // ─── Notifications ───
@@ -126,19 +121,10 @@ export type GameAction =
   | { type: 'TICK'; dt: number }
   | { type: 'SEND_EXPEDITION'; heroId: number }
   | { type: 'RECALL_HERO'; heroId: number }
+  | { type: 'CLAIM_LOOT'; heroId: number }
   | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
   | { type: 'CRAFT' }
-  | { type: 'SELL_SOUP' }
   | { type: 'APPLY_POTION'; potionIndex: number; heroId: number }
   | { type: 'RECRUIT_HERO' }
   | { type: 'RESET'; seed: number }
   | { type: 'DISMISS_NOTIFICATION'; id: number };
-
-// ─── Helpers ───
-
-/** Get the total buff value of a given effect type applied to a hero via potions. */
-export function getHeroBuff(_heroId: number, _effectType: PotionEffectType, _state: GameState): number {
-  // Potions are consumed instantly — buffs are baked into hero.stats.
-  // This function exists as a conceptual hook for future use.
-  return 0;
-}
