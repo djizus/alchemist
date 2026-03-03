@@ -125,6 +125,7 @@ export type GameAction =
   | { type: 'CLAIM_LOOT'; heroId: number }
   | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
   | { type: 'CRAFT' }
+  | { type: 'CRAFT_ALL' }
   | { type: 'APPLY_POTION'; potionIndex: number; heroId: number }
   | { type: 'RECRUIT_HERO' }
   | { type: 'RESET'; seed: number }

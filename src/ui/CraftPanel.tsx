@@ -38,6 +38,11 @@ export function CraftPanel({ state, dispatch }: Props) {
 
   const brewStatus = getBrewStatus(state);
 
+  // Count untried combos with slot 1's ingredient
+  const untriedCount = slotA.ingredientName
+    ? countUntriedCombos(state, slotA.ingredientName)
+    : 0;
+
   return (
     <section className="panel craft-panel">
       <h2 className="panel-title">Crafting</h2>
@@ -64,13 +69,23 @@ export function CraftPanel({ state, dispatch }: Props) {
           {brewStatus.type === 'known' && `✓ Known: ${brewStatus.name}`}
         </div>
       )}
-      <button
-        className="btn btn-craft"
-        disabled={!canCraft}
-        onClick={() => dispatch({ type: 'CRAFT' })}
-      >
-        Brew
-      </button>
+      <div className="craft-buttons">
+        <button
+          className="btn btn-craft"
+          disabled={!canCraft}
+          onClick={() => dispatch({ type: 'CRAFT' })}
+        >
+          Brew
+        </button>
+        {slotA.ingredientName && untriedCount > 0 && (
+          <button
+            className="btn btn-craft btn-craft-all"
+            onClick={() => dispatch({ type: 'CRAFT_ALL' })}
+          >
+            Brew All Untried ({untriedCount})
+          </button>
+        )}
+      </div>
     </section>
   );
 }
@@ -122,4 +137,19 @@ function getBrewStatus(
   }
 
   return null;
+}
+
+/** Count how many untried ingredient combinations exist with a given base ingredient. */
+function countUntriedCombos(state: GameState, base: string): number {
+  const inv = state.inventory.ingredients;
+  let count = 0;
+  for (const partner of Object.keys(inv)) {
+    if (partner === base && (inv[partner] ?? 0) < 2) continue;
+    if ((inv[partner] ?? 0) < 1) continue;
+    const recipe = findRecipe(state.recipes, base, partner);
+    if (recipe?.discovered) continue;
+    if (isFailedCombo(state, base, partner)) continue;
+    count++;
+  }
+  return count;
 }

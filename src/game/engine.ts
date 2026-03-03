@@ -96,6 +96,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return handleSetCraftSlot(state, action.slotIndex, action.ingredientName);
     case 'CRAFT':
       return handleCraft(state);
+    case 'CRAFT_ALL':
+      return handleCraftAll(state);
     case 'APPLY_POTION':
       return handleApplyPotion(state, action.potionIndex, action.heroId);
     case 'RECRUIT_HERO':
@@ -586,6 +588,35 @@ function handleCraft(state: GameState): GameState {
 
   // Clear craft slots
   s = { ...s, craftSlots: [s.craftSlots[0], { ingredientName: null }] };
+  return s;
+}
+
+/** Batch-brew: try all untried combos with the ingredient in slot 1. */
+function handleCraftAll(state: GameState): GameState {
+  const baseIngredient = state.craftSlots[0].ingredientName;
+  if (!baseIngredient) return state;
+
+  let s = state;
+  const candidates = Object.keys(s.inventory.ingredients);
+
+  for (const partner of candidates) {
+    const baseQty = s.inventory.ingredients[baseIngredient] ?? 0;
+    if (baseQty < 1) break;
+
+    const needed = partner === baseIngredient ? 2 : 1;
+    if ((s.inventory.ingredients[partner] ?? 0) < needed) continue;
+
+    const recipe = findRecipe(s.recipes, baseIngredient, partner);
+    if (recipe?.discovered) continue;
+    if (isFailedCombo(s, baseIngredient, partner)) continue;
+
+    s = { ...s, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: partner }] };
+    s = handleCraft(s);
+
+    if (s.gameOver) break;
+  }
+
+  s = { ...s, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: null }] };
   return s;
 }
 

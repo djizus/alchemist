@@ -1231,3 +1231,16 @@ body {
   background: rgba(160, 80, 208, 0.3);
   color: white;
 }
+
+/* ─── Craft Buttons ─── */
+
+.craft-buttons {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.btn-craft-all {
+  font-size: 0.8rem;
+  letter-spacing: 1px;
+}
