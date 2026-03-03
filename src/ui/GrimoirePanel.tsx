@@ -44,7 +44,9 @@ export function GrimoirePanel({ state, dispatch }: Props) {
   return (
     <section className="panel grimoire-panel">
       <h2 className="panel-title">
-        <span>Grimoire ({discovered.length}/{TOTAL_POTIONS})</span>
+        <span>Grimoire ({discovered.length}/{TOTAL_POTIONS}){state.failedCombos.length > 0 && (
+          <span className="grimoire-failed-count"> — {state.failedCombos.length} failed</span>
+        )}</span>
         <span className="grimoire-meter">
           <span
             className="grimoire-meter-fill"
@@ -70,21 +72,35 @@ export function GrimoirePanel({ state, dispatch }: Props) {
       </div>
       <div className="grimoire-grid">
         {sorted.map(recipe => {
-          const craftable = canCraftRecipe(state, recipe.ingredients);
+          const brewCount = maxBrewCount(state, recipe.ingredients);
           return (
             <div
               key={recipe.id}
-              className={`grimoire-entry discovered${craftable ? ' craftable' : ''}`}
+              className={`grimoire-entry discovered${brewCount > 0 ? ' craftable' : ''}`}
               onClick={() => handleRecipeClick(recipe.ingredients)}
-              title={craftable ? 'Ingredients available — click to brew' : 'Click to auto-fill craft slots'}
+              title={brewCount > 0 ? 'Ingredients available \u2014 click to auto-fill' : 'Click to auto-fill craft slots'}
             >
-              <span className="recipe-name">{recipe.name}</span>
-              <span className="recipe-ingredients">
-                {recipe.ingredients[0]} + {recipe.ingredients[1]}
-              </span>
-              <span className="recipe-effect">
-                {formatEffect(recipe.effect.type, recipe.effect.value)}
-              </span>
+              <div className="recipe-info">
+                <span className="recipe-name">{recipe.name}</span>
+                <span className="recipe-ingredients">
+                  {recipe.ingredients[0]} + {recipe.ingredients[1]}
+                </span>
+                <span className="recipe-effect">
+                  {formatEffect(recipe.effect.type, recipe.effect.value)}
+                </span>
+              </div>
+              {brewCount > 0 && (
+                <button
+                  className="btn btn-sm btn-brew-inline"
+                  onClick={e => {
+                    e.stopPropagation();
+                    dispatch({ type: 'CRAFT_RECIPE', recipeId: recipe.id });
+                  }}
+                  title={`Brew all ${brewCount}`}
+                >
+                  Brew \u00d7{brewCount}
+                </button>
+              )}
             </div>
           );
         })}
@@ -123,10 +139,15 @@ export function GrimoirePanel({ state, dispatch }: Props) {
 
 /** Check if the player has both ingredients to craft a recipe. */
 function canCraftRecipe(state: GameState, ingredients: [string, string]): boolean {
+  return maxBrewCount(state, ingredients) > 0;
+}
+
+/** How many times can this recipe be brewed with current inventory? */
+function maxBrewCount(state: GameState, ingredients: [string, string]): number {
   const [a, b] = ingredients;
   const inv = state.inventory.ingredients;
-  if (a === b) return (inv[a] ?? 0) >= 2;
-  return (inv[a] ?? 0) >= 1 && (inv[b] ?? 0) >= 1;
+  if (a === b) return Math.floor((inv[a] ?? 0) / 2);
+  return Math.min(inv[a] ?? 0, inv[b] ?? 0);
 }
 
 function countByType(recipes: Recipe[], type: EffectFilter): number {

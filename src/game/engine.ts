@@ -98,6 +98,8 @@ export function gameReducer(state: GameState, action: GameAction): GameState {
       return handleCraft(state);
     case 'CRAFT_ALL':
       return handleCraftAll(state);
+    case 'CRAFT_RECIPE':
+      return handleCraftRecipe(state, action.recipeId);
     case 'APPLY_POTION':
       return handleApplyPotion(state, action.potionIndex, action.heroId);
     case 'RECRUIT_HERO':
@@ -617,6 +619,54 @@ function handleCraftAll(state: GameState): GameState {
   }
 
   s = { ...s, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: null }] };
+  return s;
+}
+
+/** Brew a known recipe as many times as ingredients allow. */
+function handleCraftRecipe(state: GameState, recipeId: number): GameState {
+  const recipe = state.recipes.find(r => r.id === recipeId);
+  if (!recipe || !recipe.discovered) return state;
+
+  const [ingA, ingB] = recipe.ingredients;
+  let s = state;
+  let brewed = 0;
+
+  for (;;) {
+    const inv = s.inventory;
+    const qtyA = inv.ingredients[ingA] ?? 0;
+    const qtyB = inv.ingredients[ingB] ?? 0;
+
+    if (ingA === ingB) {
+      if (qtyA < 2) break;
+    } else {
+      if (qtyA < 1 || qtyB < 1) break;
+    }
+
+    const newIngredients = { ...inv.ingredients };
+    newIngredients[ingA] = (newIngredients[ingA] ?? 0) - 1;
+    newIngredients[ingB] = (newIngredients[ingB] ?? 0) - 1;
+
+    for (const key of Object.keys(newIngredients)) {
+      if (newIngredients[key] <= 0) delete newIngredients[key];
+    }
+
+    s = {
+      ...s,
+      inventory: {
+        ...s.inventory,
+        ingredients: newIngredients,
+        potions: [
+          ...s.inventory.potions,
+          { recipeId: recipe.id, name: recipe.name, effect: recipe.effect },
+        ],
+      },
+    };
+    brewed++;
+  }
+
+  if (brewed > 0) {
+    s = addNotification(s, `Brewed ${brewed}× ${recipe.name}`, 'success');
+  }
   return s;
 }
 

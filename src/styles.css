@@ -845,6 +845,15 @@ body {
   box-shadow: 0 0 6px rgba(160, 80, 208, 0.3);
 }
 
+.grimoire-failed-count {
+  font-family: var(--font-body);
+  font-size: 0.7rem;
+  color: var(--accent-red);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .grimoire-grid {
   display: flex;
   flex-direction: column;
@@ -865,6 +874,10 @@ body {
   background: var(--bg-card);
   border: 1px solid var(--border-color);
   cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .grimoire-entry.discovered:hover {
@@ -881,6 +894,28 @@ body {
   border-left-color: var(--accent-green);
   border-color: var(--accent-green);
   background: rgba(64, 192, 96, 0.08);
+}
+
+.recipe-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-brew-inline {
+  flex-shrink: 0;
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  padding: 4px 10px;
+  background: linear-gradient(135deg, #102018, #183028);
+  border-color: var(--accent-green-dim);
+  color: var(--accent-green);
+  white-space: nowrap;
+}
+
+.btn-brew-inline:hover:not(:disabled) {
+  border-color: var(--accent-green);
+  color: #60e080;
+  box-shadow: var(--shadow-glow-green);
 }
 
 .grimoire-entry.undiscovered {

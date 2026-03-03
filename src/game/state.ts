@@ -126,6 +126,7 @@ export type GameAction =
   | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
   | { type: 'CRAFT' }
   | { type: 'CRAFT_ALL' }
+  | { type: 'CRAFT_RECIPE'; recipeId: number }
   | { type: 'APPLY_POTION'; potionIndex: number; heroId: number }
   | { type: 'RECRUIT_HERO' }
   | { type: 'RESET'; seed: number }
