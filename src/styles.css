@@ -785,6 +785,48 @@ body {
   justify-content: space-between;
 }
 
+.grimoire-filters {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 10px;
+}
+
+.grimoire-filter-btn {
+  flex: 1;
+  font-family: var(--font-title);
+  font-size: 0.65rem;
+  letter-spacing: 0.5px;
+  padding: 5px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  background: var(--bg-card);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+.grimoire-filter-btn:hover {
+  border-color: var(--accent-purple-dim);
+  color: var(--text-secondary);
+}
+
+.grimoire-filter-btn.active {
+  border-color: var(--accent-purple);
+  color: var(--accent-purple);
+  background: rgba(160, 80, 208, 0.08);
+  box-shadow: var(--shadow-glow-purple);
+}
+
+.filter-count {
+  font-size: 0.6rem;
+  opacity: 0.7;
+}
+
 .grimoire-meter {
   flex: 1;
   max-width: 100px;
@@ -828,6 +870,17 @@ body {
 .grimoire-entry.discovered:hover {
   border-color: var(--border-glow);
   background: var(--bg-hover);
+}
+
+.grimoire-entry.craftable {
+  border-left: 3px solid var(--accent-green-dim);
+  background: rgba(64, 192, 96, 0.04);
+}
+
+.grimoire-entry.craftable:hover {
+  border-left-color: var(--accent-green);
+  border-color: var(--accent-green);
+  background: rgba(64, 192, 96, 0.08);
 }
 
 .grimoire-entry.undiscovered {

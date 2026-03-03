@@ -1,5 +1,15 @@
-import type { GameState, GameAction } from '../game/state';
+import { useState } from 'react';
+import type { GameState, GameAction, Recipe } from '../game/state';
 import { TOTAL_POTIONS } from '../game/constants';
+
+type EffectFilter = 'all' | 'max_hp' | 'power' | 'regen_speed';
+
+const FILTER_TABS: { key: EffectFilter; label: string }[] = [
+  { key: 'all', label: 'All' },
+  { key: 'max_hp', label: 'Max HP' },
+  { key: 'power', label: 'Power' },
+  { key: 'regen_speed', label: 'Regen' },
+];
 
 interface Props {
   state: GameState;
@@ -7,9 +17,24 @@ interface Props {
 }
 
 export function GrimoirePanel({ state, dispatch }: Props) {
+  const [filter, setFilter] = useState<EffectFilter>('all');
+
   const discovered = state.recipes.filter(r => r.discovered);
   const undiscoveredCount = TOTAL_POTIONS - discovered.length;
   const progressPct = (discovered.length / TOTAL_POTIONS) * 100;
+
+  // Filter by effect type
+  const filtered = filter === 'all'
+    ? discovered
+    : discovered.filter(r => r.effect.type === filter);
+
+  // Sort: craftable first, then by effect value descending
+  const sorted = [...filtered].sort((a, b) => {
+    const aCraft = canCraftRecipe(state, a.ingredients) ? 1 : 0;
+    const bCraft = canCraftRecipe(state, b.ingredients) ? 1 : 0;
+    if (aCraft !== bCraft) return bCraft - aCraft;
+    return b.effect.value - a.effect.value;
+  });
 
   const handleRecipeClick = (ingredients: [string, string]) => {
     dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: ingredients[0] });
@@ -27,31 +52,50 @@ export function GrimoirePanel({ state, dispatch }: Props) {
           />
         </span>
       </h2>
-      <div className="grimoire-grid">
-        {discovered.map(recipe => (
-          <div
-            key={recipe.id}
-            className="grimoire-entry discovered"
-            onClick={() => handleRecipeClick(recipe.ingredients)}
-            title="Click to auto-fill craft slots"
+      <div className="grimoire-filters">
+        {FILTER_TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            className={`grimoire-filter-btn${filter === key ? ' active' : ''}`}
+            onClick={() => setFilter(key)}
           >
-            <span className="recipe-name">{recipe.name}</span>
-            <span className="recipe-ingredients">
-              {recipe.ingredients[0]} + {recipe.ingredients[1]}
-            </span>
-            <span className="recipe-effect">
-              {formatEffect(recipe.effect.type, recipe.effect.value)}
-            </span>
-          </div>
+            {label}
+            {key !== 'all' && (
+              <span className="filter-count">
+                {countByType(discovered, key)}
+              </span>
+            )}
+          </button>
         ))}
-        {Array.from({ length: undiscoveredCount }).map((_, i) => (
+      </div>
+      <div className="grimoire-grid">
+        {sorted.map(recipe => {
+          const craftable = canCraftRecipe(state, recipe.ingredients);
+          return (
+            <div
+              key={recipe.id}
+              className={`grimoire-entry discovered${craftable ? ' craftable' : ''}`}
+              onClick={() => handleRecipeClick(recipe.ingredients)}
+              title={craftable ? 'Ingredients available — click to brew' : 'Click to auto-fill craft slots'}
+            >
+              <span className="recipe-name">{recipe.name}</span>
+              <span className="recipe-ingredients">
+                {recipe.ingredients[0]} + {recipe.ingredients[1]}
+              </span>
+              <span className="recipe-effect">
+                {formatEffect(recipe.effect.type, recipe.effect.value)}
+              </span>
+            </div>
+          );
+        })}
+        {filter === 'all' && Array.from({ length: undiscoveredCount }).map((_, i) => (
           <div key={`undiscovered-${i}`} className="grimoire-entry undiscovered">
             ???
           </div>
         ))}
       </div>
 
-      {state.failedCombos.length > 0 && (
+      {filter === 'all' && state.failedCombos.length > 0 && (
         <div className="grimoire-failed-section">
           <h3 className="inventory-subtitle">
             Failed Brews ({state.failedCombos.length})
@@ -75,6 +119,18 @@ export function GrimoirePanel({ state, dispatch }: Props) {
       )}
     </section>
   );
+}
+
+/** Check if the player has both ingredients to craft a recipe. */
+function canCraftRecipe(state: GameState, ingredients: [string, string]): boolean {
+  const [a, b] = ingredients;
+  const inv = state.inventory.ingredients;
+  if (a === b) return (inv[a] ?? 0) >= 2;
+  return (inv[a] ?? 0) >= 1 && (inv[b] ?? 0) >= 1;
+}
+
+function countByType(recipes: Recipe[], type: EffectFilter): number {
+  return recipes.filter(r => r.effect.type === type).length;
 }
 
 function formatEffect(type: string, value: number): string {
