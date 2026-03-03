@@ -98,7 +98,7 @@ export function GrimoirePanel({ state, dispatch }: Props) {
                   }}
                   title={`Brew all ${brewCount}`}
                 >
-                  Brew \u00d7{brewCount}
+                  Brew ×{brewCount}
                 </button>
               )}
             </div>
