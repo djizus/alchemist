@@ -1,200 +1,147 @@
 // ═══════════════════════════════════════════════
-// RECIPE GENERATION — Full spec algorithm
+// RECIPE GENERATION — 30 two-ingredient recipes
 // ═══════════════════════════════════════════════
+//
+// Deterministic from session seed.
+// Each recipe: 2 ingredients + PotionEffect (max_hp | power | regen_speed).
+// Algorithm ensures:
+//   1. All 5 zones contribute ingredients (pinning)
+//   2. No duplicate combos
+//   3. Effect distribution is balanced
 
-import { createRng } from './rng';
-import type { Recipe } from './state';
 import {
-  ZONES,
   ALL_INGREDIENTS,
   INGREDIENT_ZONE,
-  TOTAL_POTIONS,
-  RECIPE_2_COUNT,
-  RECIPE_3_COUNT,
   POTION_ADJECTIVES,
   POTION_NOUNS,
+  TOTAL_POTIONS,
+  ZONES,
+  type PotionEffect,
+  type PotionEffectType,
 } from './constants';
+import { createRng, randInt, randPick, shuffle } from './rng';
+import type { Recipe } from './state';
 
-function comboKey(ingredients: string[]): string {
-  return ingredients.slice().sort().join('|');
+/** Canonical key for an ingredient pair (sorted). */
+function pairKey(a: string, b: string): string {
+  return a < b ? `${a}|${b}` : `${b}|${a}`;
 }
 
-function highestZoneTier(ingredients: string[]): number {
-  return Math.max(...ingredients.map(ing => INGREDIENT_ZONE[ing] ?? 0));
-}
-
-/**
- * Generate all recipes for a session. Deterministic given the seed.
- *
- * Algorithm per spec:
- * Phase 1: Pinned recipes — guarantee zone coverage (2-3 per zone, ~12-13)
- * Phase 2: Fill remaining 2-ingredient recipes up to ~32
- * Phase 3: 3-ingredient recipes (~13)
- * Phase 4: 4-ingredient recipes (~5)
- * Post-check: every ingredient appears in at least 1 recipe
- */
+/** Generate all 30 recipes deterministically from a seed. */
 export function generateRecipes(seed: number): Recipe[] {
   const rng = createRng(seed);
   const recipes: Recipe[] = [];
-  const usedCombos = new Set<string>();
+  const usedPairs = new Set<string>();
+  const usedNames = new Set<string>();
 
-  // Generate unique potion names
-  const potionNames = generatePotionNames(seed);
+  // ── Phase 1: Pinned recipes ──
+  // Guarantee each zone has at least 2 recipes using its ingredients.
+  // This ensures all zones must be explored to complete the grimoire.
+  for (const zone of ZONES) {
+    const zoneIngredients = [...zone.ingredients];
+    shuffle(rng, zoneIngredients);
 
-  let potionIdx = 0;
+    // Create 2 pinned recipes per zone = 10 pinned recipes
+    for (let p = 0; p < 2; p++) {
+      const a = zoneIngredients[p * 2];
+      const b = zoneIngredients[p * 2 + 1] ?? zoneIngredients[(p * 2 + 1) % zoneIngredients.length];
+      const key = pairKey(a, b);
+      if (usedPairs.has(key)) continue;
+      usedPairs.add(key);
 
-  function addRecipe(ingredients: string[], size: number): boolean {
-    if (potionIdx >= TOTAL_POTIONS) return false;
-    const key = comboKey(ingredients);
-    if (usedCombos.has(key)) return false;
-    usedCombos.add(key);
+      const effect = generateEffect(rng, recipes.length);
+      const name = generatePotionName(rng, usedNames);
+      recipes.push({
+        id: recipes.length,
+        name,
+        ingredients: a < b ? [a, b] : [b, a],
+        effect,
+        discovered: false,
+      });
+    }
+  }
+
+  // ── Phase 2: Cross-zone recipes ──
+  // Mix ingredients from different zones for the remaining recipes.
+  // Prefer mixing adjacent tiers for moderate difficulty ramp.
+  const allIngredients = [...ALL_INGREDIENTS];
+  let attempts = 0;
+  const maxAttempts = 5000;
+
+  while (recipes.length < TOTAL_POTIONS && attempts < maxAttempts) {
+    attempts++;
+    const a = randPick(rng, allIngredients);
+    const b = randPick(rng, allIngredients);
+    if (a === b) continue;
+
+    const key = pairKey(a, b);
+    if (usedPairs.has(key)) continue;
+
+    // Bias toward cross-zone combos
+    const zoneA = INGREDIENT_ZONE[a];
+    const zoneB = INGREDIENT_ZONE[b];
+    if (zoneA === zoneB && rng() < 0.5) continue;
+
+    usedPairs.add(key);
+    const effect = generateEffect(rng, recipes.length);
+    const name = generatePotionName(rng, usedNames);
     recipes.push({
-      id: potionIdx,
-      name: potionNames[potionIdx],
-      ingredients: ingredients.slice().sort(),
-      size,
-      tier: highestZoneTier(ingredients),
+      id: recipes.length,
+      name,
+      ingredients: a < b ? [a, b] : [b, a],
+      effect,
+      discovered: false,
     });
-    potionIdx++;
-    return true;
   }
 
-  // ─── Phase 1: Pinned recipes (zone coverage) ───
-  // For each zone, generate 2-3 recipes with at least 1 pinned ingredient
-  for (let z = 0; z < 5; z++) {
-    const count = z < 3 ? 3 : 2; // more recipes for easier zones
-    for (let r = 0; r < count; r++) {
-      const pinned = ZONES[z].ingredients[rng.nextInt(5)];
-      // Second ingredient from any zone <= current+1
-      const maxZone = Math.min(z + 1, 4);
-      let other: string;
-      let attempts = 0;
-      do {
-        other = ZONES[rng.nextInt(maxZone + 1)].ingredients[rng.nextInt(5)];
-        attempts++;
-      } while (other === pinned && attempts < 50);
-
-      if (other !== pinned) {
-        addRecipe([pinned, other], 2);
-      }
-    }
-  }
-
-  // ─── Phase 2: Fill remaining 2-ingredient recipes ───
-  let safety = 0;
-  while (potionIdx < RECIPE_2_COUNT && potionIdx < TOTAL_POTIONS && safety < 500) {
-    safety++;
-    const a = rng.pick(ALL_INGREDIENTS);
-    let b: string;
-    let attempts = 0;
-    do {
-      b = rng.pick(ALL_INGREDIENTS);
-      attempts++;
-    } while (b === a && attempts < 50);
-    if (b !== a) {
-      addRecipe([a, b], 2);
-    }
-  }
-
-  // ─── Phase 3: 3-ingredient recipes ───
-  const target3 = potionIdx + RECIPE_3_COUNT;
-  safety = 0;
-  while (potionIdx < target3 && potionIdx < TOTAL_POTIONS && safety < 500) {
-    safety++;
-    // At least 1 from zone B or higher
-    const highZone = 2 + rng.nextInt(3); // zones B(2), A(3), S(4)
-    const a = ZONES[highZone].ingredients[rng.nextInt(5)];
-    let b: string;
-    let attempts = 0;
-    do {
-      b = rng.pick(ALL_INGREDIENTS);
-      attempts++;
-    } while (b === a && attempts < 50);
-    let c: string;
-    attempts = 0;
-    do {
-      c = rng.pick(ALL_INGREDIENTS);
-      attempts++;
-    } while ((c === a || c === b) && attempts < 50);
-
-    if (a !== b && a !== c && b !== c) {
-      addRecipe([a, b, c], 3);
-    }
-  }
-
-  // ─── Phase 4: 4-ingredient recipes ───
-  safety = 0;
-  while (potionIdx < TOTAL_POTIONS && safety < 500) {
-    safety++;
-    // At least 1 pinned from zone A or S
-    const pinZone = 3 + rng.nextInt(2); // zone A(3) or S(4)
-    const pinned = ZONES[pinZone].ingredients[rng.nextInt(5)];
-    const a = rng.pick(ALL_INGREDIENTS);
-    let b: string;
-    let attempts = 0;
-    do {
-      b = rng.pick(ALL_INGREDIENTS);
-      attempts++;
-    } while ((b === a || b === pinned) && attempts < 50);
-    let c: string;
-    attempts = 0;
-    do {
-      c = rng.pick(ALL_INGREDIENTS);
-      attempts++;
-    } while ((c === a || c === b || c === pinned) && attempts < 50);
-
-    const ings = [pinned, a, b, c];
-    // Ensure all 4 are unique
-    const unique = new Set(ings);
-    if (unique.size === 4) {
-      addRecipe(Array.from(unique), 4);
-    }
-  }
-
-  // ─── Post-check: every ingredient in at least 1 recipe ───
-  const usedIngredients = new Set<string>();
-  recipes.forEach(r => r.ingredients.forEach(ing => usedIngredients.add(ing)));
-
-  const orphans = ALL_INGREDIENTS.filter(ing => !usedIngredients.has(ing));
-  for (const orphan of orphans) {
-    // Replace the last 2-ingredient recipe that doesn't create a dup
-    for (let i = recipes.length - 1; i >= 0; i--) {
-      if (recipes[i].size === 2) {
-        const partner = rng.pick(ALL_INGREDIENTS.filter(x => x !== orphan));
-        const key = comboKey([orphan, partner]);
-        if (!usedCombos.has(key)) {
-          // Remove old combo key
-          usedCombos.delete(comboKey(recipes[i].ingredients));
-          usedCombos.add(key);
-          recipes[i] = {
-            ...recipes[i],
-            ingredients: [orphan, partner].sort(),
-            tier: highestZoneTier([orphan, partner]),
-          };
-          break;
-        }
-      }
-    }
-  }
-
-  return recipes.slice(0, TOTAL_POTIONS);
+  return recipes;
 }
 
-function generatePotionNames(seed: number): string[] {
-  const rng = createRng(seed + 999); // offset seed to avoid correlation with recipe RNG
-  const names: string[] = [];
-  const used = new Set<string>();
+/** Generate a potion effect based on recipe index for balanced distribution. */
+function generateEffect(rng: () => number, index: number): PotionEffect {
+  const types: PotionEffectType[] = ['max_hp', 'power', 'regen_speed'];
 
-  for (let i = 0; i < TOTAL_POTIONS; i++) {
-    let name: string;
-    let attempts = 0;
-    do {
-      name = rng.pick(POTION_ADJECTIVES) + ' ' + rng.pick(POTION_NOUNS);
-      attempts++;
-    } while (used.has(name) && attempts < 200);
-    used.add(name);
-    names.push(name);
+  // Cycle through types with some randomness to ensure balance
+  const baseType = types[index % 3];
+  const type = rng() < 0.7 ? baseType : randPick(rng, types);
+
+  let value: number;
+  switch (type) {
+    case 'max_hp':
+      value = randInt(rng, 5, 20);   // +5 to +20 max HP
+      break;
+    case 'power':
+      value = randInt(rng, 1, 5);    // +1 to +5 power
+      break;
+    case 'regen_speed':
+      value = randInt(rng, 1, 3);    // +1 to +3 HP/s regen (significant)
+      break;
   }
 
-  return names;
+  return { type, value };
+}
+
+/** Generate a unique potion name. */
+function generatePotionName(rng: () => number, used: Set<string>): string {
+  let name: string;
+  let attempts = 0;
+  do {
+    const adj = randPick(rng, POTION_ADJECTIVES);
+    const noun = randPick(rng, POTION_NOUNS);
+    name = `${adj} ${noun}`;
+    attempts++;
+  } while (used.has(name) && attempts < 100);
+
+  used.add(name);
+  return name;
+}
+
+/** Look up a recipe by ingredient pair. Returns recipe or undefined. */
+export function findRecipe(
+  recipes: readonly Recipe[],
+  ingredientA: string,
+  ingredientB: string,
+): Recipe | undefined {
+  const key = pairKey(ingredientA, ingredientB);
+  return recipes.find(r => pairKey(r.ingredients[0], r.ingredients[1]) === key);
 }

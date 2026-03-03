@@ -1,48 +1,34 @@
 // ═══════════════════════════════════════════════
-// useGameState — React state management via useReducer
+// useGameState — Central state hook
 // ═══════════════════════════════════════════════
 
-import { useReducer, useCallback } from 'react';
-import { gameReducer, createInitialState } from '../game/engine';
+import { useReducer, useRef, useCallback, type MutableRefObject } from 'react';
+import { createInitialState, gameReducer } from '../game/engine';
+import { randomSeed } from '../game/rng';
+import type { GameAction, GameState } from '../game/state';
 
-export function useGameState() {
-  const [state, dispatch] = useReducer(gameReducer, null, () => createInitialState());
+export interface GameStateHandle {
+  state: GameState;
+  dispatch: (action: GameAction) => void;
+  stateRef: MutableRefObject<GameState>;
+  reset: () => void;
+}
 
-  const tick = useCallback((now: number) => {
-    dispatch({ type: 'TICK', now });
-  }, []);
+export function useGameState(): GameStateHandle {
+  const seed = useRef(randomSeed()).current;
+  const [state, rawDispatch] = useReducer(gameReducer, seed, createInitialState);
 
-  const sendExpedition = useCallback((heroId: number, zoneId: number) => {
-    dispatch({ type: 'SEND_EXPEDITION', heroId, zoneId });
-  }, []);
+  // Shared ref for Phaser (read-only access)
+  const stateRef = useRef(state);
+  stateRef.current = state;
 
-
-  const craftWithSlots = useCallback((slots: string[]) => {
-    dispatch({ type: 'CRAFT', selectedIngredients: slots });
-  }, []);
-
-  const recruit = useCallback(() => {
-    dispatch({ type: 'RECRUIT' });
-  }, []);
-
-  const setCraftSlot = useCallback((slotIdx: number, value: string) => {
-    dispatch({ type: 'SET_CRAFT_SLOT', slotIdx, value });
+  const dispatch = useCallback((action: GameAction) => {
+    rawDispatch(action);
   }, []);
 
   const reset = useCallback(() => {
-    dispatch({ type: 'RESET' });
+    rawDispatch({ type: 'RESET', seed: randomSeed() });
   }, []);
 
-  return {
-    state,
-    dispatch,
-    tick,
-    sendExpedition,
-    craftWithSlots,
-    recruit,
-    setCraftSlot,
-    reset,
-  };
+  return { state, dispatch, stateRef, reset };
 }
-
-export type GameActions = ReturnType<typeof useGameState>;

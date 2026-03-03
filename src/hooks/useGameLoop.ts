@@ -1,19 +1,20 @@
 // ═══════════════════════════════════════════════
-// useGameLoop — 100ms game tick
+// useGameLoop — 100ms tick interval
 // ═══════════════════════════════════════════════
 
 import { useEffect, useRef } from 'react';
 import { TICK_INTERVAL } from '../game/constants';
+import type { GameAction } from '../game/state';
 
-export function useGameLoop(onTick: (now: number) => void) {
-  const tickRef = useRef(onTick);
-  tickRef.current = onTick;
+export function useGameLoop(dispatch: (action: GameAction) => void): void {
+  const dispatchRef = useRef(dispatch);
+  dispatchRef.current = dispatch;
 
   useEffect(() => {
-    const interval = setInterval(() => {
-      tickRef.current(Date.now());
+    const id = setInterval(() => {
+      dispatchRef.current({ type: 'TICK', dt: TICK_INTERVAL });
     }, TICK_INTERVAL);
 
-    return () => clearInterval(interval);
+    return () => clearInterval(id);
   }, []);
 }

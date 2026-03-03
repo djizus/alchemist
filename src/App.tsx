@@ -1,127 +1,48 @@
 // ═══════════════════════════════════════════════
-// App — Root component, grid layout, state wiring
+// App — Root component, wires state → UI + Phaser
 // ═══════════════════════════════════════════════
 
-import { useRef, useState, useCallback, useMemo } from 'react';
 import { useGameState } from './hooks/useGameState';
 import { useGameLoop } from './hooks/useGameLoop';
-import { ZONES, HERO_COSTS, MAX_HEROES, TOTAL_POTIONS } from './game/constants';
-import type { GameState } from './game/state';
-import { PhaserContainer } from './phaser/PhaserContainer';
 import { TopBar } from './ui/TopBar';
-import { GrimoirePanel } from './ui/GrimoirePanel';
+import { HeroPanel } from './ui/HeroPanel';
+import { ExplorationPanel } from './ui/ExplorationPanel';
 import { CraftPanel } from './ui/CraftPanel';
-import { HeroBar } from './ui/HeroBar';
-// ZoneTooltip will be wired when Phaser exposes hover events
+import { GrimoirePanel } from './ui/GrimoirePanel';
+import { InventoryPanel } from './ui/InventoryPanel';
+import { EventLog } from './ui/EventLog';
 import { Notifications } from './ui/Notifications';
 import { WinOverlay } from './ui/WinOverlay';
+import { PhaserContainer } from './phaser/PhaserContainer';
 
-export default function App() {
-  const { state, tick, sendExpedition, craftWithSlots, recruit, setCraftSlot, reset } =
-    useGameState();
-
-  const [now, setNow] = useState(Date.now());
-
-  // Shared ref for Phaser to read game state
-  const gameStateRef = useRef<GameState>(state);
-  gameStateRef.current = state;
-
-  // Game tick
-  useGameLoop((t) => {
-    setNow(t);
-    tick(t);
-  });
-
-  // Compute derived values
-  const elapsed = Math.floor((now - state.sessionStart) / 1000);
-  const minutes = Math.floor(elapsed / 60);
-  const seconds = elapsed % 60;
-
-
-  const lastDiscoveredId = useMemo(() => {
-    if (state.discovered.length === 0) return null;
-    return state.discovered[state.discovered.length - 1];
-  }, [state.discovered]);
-
-  // Zone click handler
-  const handleZoneClick = useCallback(
-    (zoneId: number) => {
-      const zone = ZONES[zoneId];
-      const idle = state.heroes.filter((h) => h.status === 'idle');
-      const bestHero = idle.find((h) => h.hp > zone.dps * 2) || idle[0];
-      if (bestHero && bestHero.hp > zone.dps * 2) {
-        sendExpedition(bestHero.id, zoneId);
-      }
-    },
-    [state.heroes, sendExpedition]
-  );
-
-  const handleBrew = useCallback(() => {
-    craftWithSlots(state.craftSlots);
-  }, [state.craftSlots, craftWithSlots]);
-
-  // Available ingredients for crafting
-  const availableIngredients = useMemo(
-    () =>
-      Object.entries(state.inventory)
-        .filter(([, count]) => count > 0)
-        .sort(([a], [b]) => a.localeCompare(b)),
-    [state.inventory]
-  );
+export function App() {
+  const { state, dispatch, stateRef, reset } = useGameState();
+  useGameLoop(dispatch);
 
   return (
-    <div id="app">
-      <TopBar
-        gold={state.gold}
-        discoveredCount={state.discovered.length}
-        totalPotions={TOTAL_POTIONS}
-        elapsedSeconds={elapsed}
-      />
+    <div className="app">
+      <TopBar state={state} onReset={reset} />
 
-      <GrimoirePanel
-        recipes={state.recipes}
-        discovered={state.discovered}
-        lastDiscoveredId={lastDiscoveredId}
-      />
+      <div className="main-layout">
+        <div className="left-column">
+          <HeroPanel state={state} dispatch={dispatch} />
+          <ExplorationPanel state={state} dispatch={dispatch} />
+        </div>
 
-      <div className="center-area">
-        <PhaserContainer
-          gameStateRef={gameStateRef}
-          onZoneClick={handleZoneClick}
-        />
+        <div className="center-column">
+          <PhaserContainer stateRef={stateRef} />
+        </div>
 
-        {state.won && (
-          <WinOverlay
-            totalPotions={TOTAL_POTIONS}
-            elapsedMinutes={minutes}
-            elapsedSeconds={seconds}
-            goldEarned={Math.floor(state.gold)}
-            onNewSession={reset}
-          />
-        )}
+        <div className="right-column">
+          <CraftPanel state={state} dispatch={dispatch} />
+          <InventoryPanel state={state} dispatch={dispatch} />
+          <GrimoirePanel state={state} />
+        </div>
       </div>
 
-      <CraftPanel
-        craftSlots={state.craftSlots}
-        craftResult={state.craftResult}
-        inventory={availableIngredients}
-        testedCount={state.testedCombos.size}
-        onSetSlot={setCraftSlot}
-        onBrew={handleBrew}
-      />
-
-      <HeroBar
-        heroes={state.heroes}
-        gold={state.gold}
-        zones={ZONES}
-        now={now}
-        onSendExpedition={sendExpedition}
-        onRecruit={recruit}
-        heroCosts={HERO_COSTS}
-        maxHeroes={MAX_HEROES}
-      />
-
-      <Notifications notifications={state.notifications} now={now} />
+      <EventLog state={state} />
+      <Notifications state={state} dispatch={dispatch} />
+      {state.gameOver && <WinOverlay state={state} onReset={reset} />}
     </div>
   );
 }

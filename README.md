@@ -1,22 +1,24 @@
 # Alchemist
 
-Fully onchain competitive grimoire race on Starknet. Explore zones, gather ingredients, craft potions, discover hidden recipes through experimentation. First to complete the grimoire wins.
+Fully onchain competitive grimoire race on Starknet. Send heroes on expeditions through dangerous zones, gather ingredients, craft potions, and discover hidden recipes through experimentation. First to complete the grimoire wins.
 
 ## V0 — Browser PoC
 
 Playable browser prototype validating the core game loop before smart contract work.
 
-- **Stack**: React 18 + Phaser 3 + TypeScript + Vite
+- **Stack**: React 19 + Phaser 3 + TypeScript + Vite
 - **Multiplayer**: None (solo play)
 - **Goal**: Prove the loop is fun, tune balancing
 
 ### Core Loop
 
-1. Send heroes on expeditions to gather ingredients
-2. Craft potions by combining ingredients (trial and error)
-3. Discover recipes — no hints, pure experimentation
-4. Recruit more heroes (up to 3) for parallel expeditions
-5. Complete all 50 potions in the grimoire to win
+1. Send heroes on linear expeditions through increasingly dangerous zones
+2. Survive traps, beasts, and hazards — hero retreats with loot when HP hits 0
+3. Collect ingredients dropped during exploration
+4. Craft potions by combining 2 ingredients (trial and error)
+5. Give potions to heroes to permanently buff their stats (HP, Power, Regen)
+6. Recruit more heroes (up to 3) for parallel expeditions
+7. Discover all 30 recipes in the grimoire to win
 
 ### Quick Start
 
@@ -25,7 +27,7 @@ pnpm install
 pnpm dev
 ```
 
-Open `http://localhost:5173` and click zone nodes to send your hero exploring.
+Open `http://localhost:5173` to play.
 
 ### Build
 
@@ -38,21 +40,22 @@ pnpm build
 ```
 src/
 ├── game/           # Core game logic (pure functions, no UI)
-│   ├── constants.ts    # All balancing levers
+│   ├── constants.ts    # All balancing levers (zones, events, hero stats)
 │   ├── rng.ts          # Seeded RNG (mulberry32)
-│   ├── recipes.ts      # Deterministic recipe generation
+│   ├── recipes.ts      # Deterministic 30-recipe generation
 │   ├── state.ts        # TypeScript interfaces
-│   └── engine.ts       # Game reducer (tick, craft, recruit)
+│   └── engine.ts       # Game reducer (tick, explore, craft, potions)
 ├── phaser/         # Phaser 3 rendering (read-only, no state mutation)
 │   ├── AlchemistScene.ts
-│   ├── PhaserContainer.tsx
-│   └── config.ts
+│   └── PhaserContainer.tsx
 ├── ui/             # React components (pure presentational)
 │   ├── TopBar.tsx
-│   ├── GrimoirePanel.tsx
+│   ├── HeroPanel.tsx
+│   ├── ExplorationPanel.tsx
 │   ├── CraftPanel.tsx
-│   ├── HeroBar.tsx
-│   ├── ZoneTooltip.tsx
+│   ├── GrimoirePanel.tsx
+│   ├── InventoryPanel.tsx
+│   ├── EventLog.tsx
 │   ├── Notifications.tsx
 │   └── WinOverlay.tsx
 ├── hooks/          # React hooks
@@ -65,21 +68,23 @@ src/
 
 ### Architecture
 
-React owns all game state via `useReducer`. Phaser is a pure renderer — reads state from a shared ref, never mutates it. Game tick runs every 100ms.
+React owns all game state via `useReducer`. Phaser is a pure renderer — reads state from a shared ref, never mutates it. Game tick runs every 100ms, exploration events fire every 1 second.
 
 ```
 React (state + logic) --ref--> Phaser (render only)
        |
-       └── dispatch(action) -- TICK | SEND_EXPEDITION | CRAFT | RECRUIT | RESET
+       └── dispatch(action) -- TICK | SEND_EXPEDITION | RECALL_HERO | CRAFT | APPLY_POTION | RECRUIT_HERO | RESET
 ```
 
 ### Key Design Decisions
 
-- **Deterministic**: Seeded RNG means same seed = same recipes, same loot
-- **Continuous DPS**: Heroes take damage every tick during expeditions (not flat cost)
+- **Linear exploration**: Heroes auto-advance through zones (D → C → B → A → S) based on depth
+- **Event-driven**: Every second, a random event fires (trap, gold, heal, beast, or nothing)
+- **Deterministic**: Seeded RNG means same seed = same recipes, same event rolls
+- **Beast combat**: Auto-resolved by hero power vs beast power
+- **Consumable potions**: Craft a potion, then give it to a hero for permanent stat buffs
 - **No hints**: Recipe discovery is pure experimentation
 - **Progressive probability**: Safety net prevents hard deadlocks on last few recipes
-- **All zones accessible**: No unlock gates — difficulty is expressed through HP cost
 
 ### Version Roadmap
 

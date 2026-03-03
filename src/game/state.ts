@@ -1,55 +1,144 @@
 // ═══════════════════════════════════════════════
-// GAME STATE TYPES
+// GAME STATE — All TypeScript interfaces
 // ═══════════════════════════════════════════════
+
+import type { PotionEffect, PotionEffectType } from './constants';
+
+// ─── Exploration Events ───
+
+export type ExplorationEventKind =
+  | 'trap'
+  | 'gold'
+  | 'heal'
+  | 'beast_win'
+  | 'beast_lose'
+  | 'ingredient_drop'
+  | 'nothing';
+
+export interface ExplorationEvent {
+  kind: ExplorationEventKind;
+  depth: number;        // seconds into exploration when event occurred
+  zoneId: number;       // which zone the hero was in
+  value: number;        // damage taken, gold earned, HP healed, etc.
+  message: string;      // display text
+}
+
+// ─── Hero ───
+
+export type HeroStatus = 'idle' | 'exploring' | 'dead';
+
+export interface HeroStats {
+  maxHp: number;
+  power: number;
+  regenPerSec: number;  // HP/s when idle
+}
+
+export interface PendingLoot {
+  gold: number;
+  ingredients: Record<string, number>;  // ingredient name → quantity
+}
 
 export interface Hero {
   id: number;
   name: string;
   hp: number;
-  maxHp: number;
-  status: 'idle' | 'exploring' | 'cooldown';
-  zoneId: number | null;
-  expStart: number;  // timestamp ms
-  expEnd: number;    // timestamp ms
-  cooldownEnd: number; // timestamp ms
+  stats: HeroStats;
+  status: HeroStatus;
+  // Exploration state (active when status === 'exploring')
+  depth: number;                   // seconds explored so far
+  pendingLoot: PendingLoot;
+  eventLog: ExplorationEvent[];    // events from current expedition
+  lastEventTime: number;           // ms timestamp of last event roll
+  // Death cooldown
+  deathTimer: number;              // seconds remaining until revive (0 = alive)
 }
+
+// ─── Recipes & Potions ───
 
 export interface Recipe {
   id: number;
   name: string;
-  ingredients: string[]; // sorted alphabetically
-  size: number;          // 2, 3, or 4
-  tier: number;          // highest zone tier among ingredients (0-4)
+  ingredients: [string, string];   // always 2 ingredients
+  effect: PotionEffect;
+  discovered: boolean;
 }
 
-export interface Notification {
-  id: number;
-  type: 'potion-found' | 'gold-earned' | 'hero-died';
-  text: string;
-  time: number; // timestamp ms
+export interface PotionItem {
+  recipeId: number;
+  name: string;
+  effect: PotionEffect;
 }
+
+// ─── Crafting ───
+
+export interface CraftSlot {
+  ingredientName: string | null;
+}
+
+export interface CraftResult {
+  success: boolean;
+  potionName: string | null;   // null if soup
+  isNewDiscovery: boolean;
+}
+
+// ─── Notifications ───
+
+export interface GameNotification {
+  id: number;
+  message: string;
+  type: 'info' | 'success' | 'danger' | 'gold' | 'discovery';
+  timestamp: number;
+}
+
+// ─── Inventory ───
+
+export interface Inventory {
+  gold: number;
+  ingredients: Record<string, number>;  // ingredient name → quantity
+  potions: PotionItem[];                // crafted potions ready to use
+}
+
+// ─── Game State ───
 
 export interface GameState {
   seed: number;
-  gold: number;
+  rngState: number;           // current RNG counter (for determinism)
+  tick: number;               // tick counter
+  elapsedMs: number;          // total elapsed game time in ms
+
   heroes: Hero[];
-  inventory: Record<string, number>; // ingredient name -> quantity
-  discovered: number[];              // recipe IDs
-  testedCombos: Set<string>;         // combo keys already tried
-  recipes: Recipe[];                 // generated at session start
-  craftSlots: string[];              // 4 slots, '' if empty
-  craftResult: { type: 'success' | 'fail'; text: string } | null;
-  notifications: Notification[];
-  sessionStart: number;              // timestamp
-  won: boolean;
+  recipes: Recipe[];
+  inventory: Inventory;
+  craftSlots: [CraftSlot, CraftSlot];
+
+  discoveredCount: number;    // how many recipes discovered
+  craftAttempts: number;      // total craft attempts (for progressive probability)
+
+  notifications: GameNotification[];
+  nextNotificationId: number;
+
+  gameOver: boolean;          // true when all recipes discovered
 }
 
-// Action types for useReducer
+// ─── Actions ───
+
 export type GameAction =
-  | { type: 'TICK'; now: number }
-  | { type: 'SEND_EXPEDITION'; heroId: number; zoneId: number }
-  | { type: 'CRAFT'; selectedIngredients: string[] }
-  | { type: 'RECRUIT' }
-  | { type: 'SET_CRAFT_SLOT'; slotIdx: number; value: string }
-  | { type: 'RESET' }
-  | { type: 'CLEAR_CRAFT_RESULT' };
+  | { type: 'TICK'; dt: number }
+  | { type: 'SEND_EXPEDITION'; heroId: number }
+  | { type: 'RECALL_HERO'; heroId: number }
+  | { type: 'SET_CRAFT_SLOT'; slotIndex: number; ingredientName: string | null }
+  | { type: 'CRAFT' }
+  | { type: 'SELL_SOUP' }
+  | { type: 'APPLY_POTION'; potionIndex: number; heroId: number }
+  | { type: 'RECRUIT_HERO' }
+  | { type: 'RESET'; seed: number }
+  | { type: 'DISMISS_NOTIFICATION'; id: number };
+
+// ─── Helpers ───
+
+/** Get the total buff value of a given effect type applied to a hero via potions. */
+export function getHeroBuff(_heroId: number, _effectType: PotionEffectType, _state: GameState): number {
+  // Potions are consumed instantly — buffs are baked into hero.stats.
+  // This function exists as a conceptual hook for future use.
+  return 0;
+}

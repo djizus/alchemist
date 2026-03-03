@@ -1,433 +1,648 @@
 // ═══════════════════════════════════════════════
-// GAME ENGINE — Core logic: tick, craft, recruit
+// GAME ENGINE — Core reducer + logic
 // ═══════════════════════════════════════════════
 
-import { createRng } from './rng';
-import { generateRecipes } from './recipes';
-import type { GameState, GameAction, Hero, Notification } from './state';
 import {
-  ZONES,
-  HERO_NAMES,
-  HERO_COSTS,
-  MAX_HEROES,
-  HERO_MAX_HP,
-  HERO_REGEN_PER_SEC,
-  COOLDOWN_DURATION,
+  CRAFT_SLOTS,
   GOLD_PER_POTION_DISCOVERY,
-  TOTAL_POTIONS,
-  PROGRESSIVE_EXPONENT,
+  HERO_BASE_HP,
+  HERO_BASE_POWER,
+  HERO_BASE_REGEN,
+  HERO_COSTS,
+  HERO_NAMES,
+  MAX_HEROES,
   PROGRESSIVE_CAP,
-  TOTAL_POSSIBLE_2_COMBOS,
+  PROGRESSIVE_EXPONENT,
+  SOUP_GOLD_VALUE,
   TICK_INTERVAL,
+  TOTAL_POSSIBLE_2_COMBOS,
+  TOTAL_POTIONS,
+  ZONES,
+  type ZoneData,
 } from './constants';
-
-let notifIdCounter = 0;
-
-function nextNotifId(): number {
-  return ++notifIdCounter;
-}
+import { createRng, randInt, randPick, type Rng } from './rng';
+import { generateRecipes, findRecipe } from './recipes';
+import type {
+  ExplorationEvent,
+  GameAction,
+  GameNotification,
+  GameState,
+  Hero,
+  PendingLoot,
+} from './state';
 
 // ─── State Factory ───
 
-export function createInitialState(seed?: number): GameState {
-  const s = seed ?? Math.floor(Math.random() * 2147483647);
+export function createInitialState(seed: number): GameState {
+  const recipes = generateRecipes(seed);
   return {
-    seed: s,
-    gold: 0,
-    heroes: [
-      {
-        id: 0,
-        name: HERO_NAMES[0],
-        hp: HERO_MAX_HP,
-        maxHp: HERO_MAX_HP,
-        status: 'idle',
-        zoneId: null,
-        expStart: 0,
-        expEnd: 0,
-        cooldownEnd: 0,
-      },
-    ],
-    inventory: {},
-    discovered: [],
-    testedCombos: new Set(),
-    recipes: generateRecipes(s),
-    craftSlots: ['', '', '', ''],
-    craftResult: null,
+    seed,
+    rngState: seed,
+    tick: 0,
+    elapsedMs: 0,
+    heroes: [createHero(0)],
+    recipes,
+    inventory: { gold: 0, ingredients: {}, potions: [] },
+    craftSlots: [{ ingredientName: null }, { ingredientName: null }],
+    discoveredCount: 0,
+    craftAttempts: 0,
     notifications: [],
-    sessionStart: Date.now(),
-    won: false,
+    nextNotificationId: 0,
+    gameOver: false,
+  };
+}
+
+function createHero(id: number): Hero {
+  return {
+    id,
+    name: HERO_NAMES[id],
+    hp: HERO_BASE_HP,
+    stats: {
+      maxHp: HERO_BASE_HP,
+      power: HERO_BASE_POWER,
+      regenPerSec: HERO_BASE_REGEN,
+    },
+    status: 'idle',
+    depth: 0,
+    pendingLoot: { gold: 0, ingredients: {} },
+    eventLog: [],
+    lastEventTime: 0,
+    deathTimer: 0,
   };
 }
 
 // ─── Reducer ───
 
 export function gameReducer(state: GameState, action: GameAction): GameState {
+  if (state.gameOver && action.type !== 'RESET') return state;
+
   switch (action.type) {
     case 'TICK':
-      return handleTick(state, action.now);
+      return handleTick(state, action.dt);
     case 'SEND_EXPEDITION':
-      return handleSendExpedition(state, action.heroId, action.zoneId);
-    case 'CRAFT':
-      return handleCraft(state, action.selectedIngredients);
-    case 'RECRUIT':
-      return handleRecruit(state);
+      return handleSendExpedition(state, action.heroId);
+    case 'RECALL_HERO':
+      return handleRecallHero(state, action.heroId);
     case 'SET_CRAFT_SLOT':
-      return handleSetCraftSlot(state, action.slotIdx, action.value);
+      return handleSetCraftSlot(state, action.slotIndex, action.ingredientName);
+    case 'CRAFT':
+      return handleCraft(state);
+    case 'SELL_SOUP':
+      return handleSellSoup(state);
+    case 'APPLY_POTION':
+      return handleApplyPotion(state, action.potionIndex, action.heroId);
+    case 'RECRUIT_HERO':
+      return handleRecruitHero(state);
     case 'RESET':
-      return createInitialState();
-    case 'CLEAR_CRAFT_RESULT':
-      return { ...state, craftResult: null };
+      return createInitialState(action.seed);
+    case 'DISMISS_NOTIFICATION':
+      return {
+        ...state,
+        notifications: state.notifications.filter(n => n.id !== action.id),
+      };
     default:
       return state;
   }
 }
 
-// ─── Tick Handler (runs every 100ms) ───
+// ─── TICK (runs every TICK_INTERVAL ms) ───
 
-function handleTick(state: GameState, now: number): GameState {
-  if (state.won) return state;
+function handleTick(state: GameState, dt: number): GameState {
+  let s = { ...state, tick: state.tick + 1, elapsedMs: state.elapsedMs + dt };
+  s = { ...s, heroes: s.heroes.map(h => tickHero(h, s)) };
 
-  let changed = false;
-  let newGold = state.gold;
-  const newInv = { ...state.inventory };
-  const newNotifs: Notification[] = [...state.notifications];
+  // Prune old notifications (keep last 10)
+  if (s.notifications.length > 10) {
+    s = { ...s, notifications: s.notifications.slice(-10) };
+  }
 
-  // Track events for Phaser
-  const events: GameEvent[] = [];
+  return s;
+}
 
-  const heroes = state.heroes.map(hero => {
-    // 1. Exploring heroes: apply DPS continuously
-    if (hero.status === 'exploring' && hero.zoneId !== null) {
-      const zone = ZONES[hero.zoneId];
-      const newHp = hero.hp - zone.dps * (TICK_INTERVAL / 1000);
+function tickHero(hero: Hero, state: GameState): Hero {
+  if (hero.status === 'idle') {
+    return tickIdleHero(hero);
+  }
+  if (hero.status === 'exploring') {
+    return tickExploringHero(hero, state);
+  }
+  return hero; // dead heroes handled elsewhere (deathTimer in idle tick)
+}
 
-      // Death check: HP <= 0
-      if (newHp <= 0) {
-        changed = true;
-        newNotifs.push({
-          id: nextNotifId(),
-          type: 'hero-died',
-          text: `${hero.name} fell in ${zone.name}!`,
-          time: now,
-        });
-        events.push({ type: 'hero-died', zoneId: hero.zoneId });
-        return {
-          ...hero,
-          hp: 0,
-          status: 'cooldown' as const,
-          zoneId: null,
-          cooldownEnd: now + COOLDOWN_DURATION,
-        };
-      }
+function tickIdleHero(hero: Hero): Hero {
+  // Regen HP when idle
+  if (hero.hp >= hero.stats.maxHp && hero.deathTimer <= 0) return hero;
 
-      // Expedition complete check
-      if (now >= hero.expEnd) {
-        changed = true;
-        const { ingredients, gold } = generateLoot(state.seed, hero);
-        for (const [ing, qty] of Object.entries(ingredients)) {
-          newInv[ing] = (newInv[ing] || 0) + qty;
-        }
-        newGold += gold;
-        newNotifs.push({
-          id: nextNotifId(),
-          type: 'gold-earned',
-          text: `+${gold}g from ${zone.name}`,
-          time: now,
-        });
-        events.push({ type: 'expedition-complete', zoneId: hero.zoneId });
-        return {
-          ...hero,
-          hp: newHp,
-          status: 'idle' as const,
-          zoneId: null,
-        };
-      }
+  let h = { ...hero };
 
-      // Still exploring, HP reduced
-      if (newHp !== hero.hp) changed = true;
-      return { ...hero, hp: newHp };
+  // Death timer countdown
+  if (h.deathTimer > 0) {
+    h.deathTimer = Math.max(0, h.deathTimer - TICK_INTERVAL / 1000);
+    if (h.deathTimer <= 0) {
+      h.hp = h.stats.maxHp;
+      h.status = 'idle';
+    }
+    return h;
+  }
+
+  // Regen: regenPerSec * (TICK_INTERVAL / 1000)
+  const regenAmount = h.stats.regenPerSec * (TICK_INTERVAL / 1000);
+  h.hp = Math.min(h.stats.maxHp, h.hp + regenAmount);
+  return h;
+}
+
+function tickExploringHero(hero: Hero, state: GameState): Hero {
+  let h = { ...hero };
+  const rng = createRng(state.seed ^ (h.id * 7919 + state.tick));
+
+  // Advance depth (depth = seconds explored, tick = 100ms → add 0.1s per tick)
+  h.depth += TICK_INTERVAL / 1000;
+
+  // Check for events every 1 second
+  const prevSecond = Math.floor((h.depth - TICK_INTERVAL / 1000));
+  const currSecond = Math.floor(h.depth);
+  if (currSecond > prevSecond && currSecond > 0) {
+    const zone = getCurrentZone(h.depth);
+    const event = rollExplorationEvent(rng, zone, h);
+
+    if (event) {
+      h = applyExplorationEvent(h, event, rng, zone);
+      h.eventLog = [...h.eventLog, event];
     }
 
-    // 2. Idle heroes: regenerate HP
-    if (hero.status === 'idle' && hero.hp < hero.maxHp) {
-      changed = true;
+    // Ingredient drops (independent of event)
+    if (rng() < zone.ingredientDropChance) {
+      const qty = randInt(rng, zone.ingredientDropQty[0], zone.ingredientDropQty[1]);
+      const ingredient = randPick(rng, zone.ingredients);
+      const newIngredients = { ...h.pendingLoot.ingredients };
+      newIngredients[ingredient] = (newIngredients[ingredient] ?? 0) + qty;
+      h.pendingLoot = { ...h.pendingLoot, ingredients: newIngredients };
+      h.eventLog = [
+        ...h.eventLog,
+        {
+          kind: 'ingredient_drop',
+          depth: h.depth,
+          zoneId: zone.id,
+          value: qty,
+          message: `Found ${qty}x ${ingredient}`,
+        },
+      ];
+    }
+  }
+
+  // Check if hero died (HP <= 0) → retreat with loot
+  if (h.hp <= 0) {
+    h.hp = 0;
+    h.status = 'idle';
+    // Loot is collected in handleHeroReturn (called by the component or tick)
+    return heroReturnsHome(h);
+  }
+
+  return h;
+}
+
+/** Get the current zone based on exploration depth. */
+export function getCurrentZone(depth: number): ZoneData {
+  let current = ZONES[0];
+  for (const zone of ZONES) {
+    if (depth >= zone.depthThreshold) {
+      current = zone;
+    } else {
+      break;
+    }
+  }
+  return current;
+}
+
+/** Roll for an exploration event based on current zone probabilities. */
+function rollExplorationEvent(
+  rng: Rng,
+  zone: ZoneData,
+  hero: Hero,
+): ExplorationEvent | null {
+  const roll = rng();
+  let cumulative = 0;
+
+  // Trap
+  cumulative += zone.trapChance;
+  if (roll < cumulative) {
+    const damage = randInt(rng, zone.trapDamage[0], zone.trapDamage[1]);
+    return {
+      kind: 'trap',
+      depth: hero.depth,
+      zoneId: zone.id,
+      value: damage,
+      message: `Triggered a trap! -${damage} HP`,
+    };
+  }
+
+  // Gold
+  cumulative += zone.goldChance;
+  if (roll < cumulative) {
+    const gold = randInt(rng, zone.goldReward[0], zone.goldReward[1]);
+    return {
+      kind: 'gold',
+      depth: hero.depth,
+      zoneId: zone.id,
+      value: gold,
+      message: `Found ${gold} gold!`,
+    };
+  }
+
+  // Heal
+  cumulative += zone.healChance;
+  if (roll < cumulative) {
+    const heal = randInt(rng, zone.healAmount[0], zone.healAmount[1]);
+    return {
+      kind: 'heal',
+      depth: hero.depth,
+      zoneId: zone.id,
+      value: heal,
+      message: `Found a healing spring! +${heal} HP`,
+    };
+  }
+
+  // Beast
+  cumulative += zone.beastChance;
+  if (roll < cumulative) {
+    const beastPower = randInt(rng, zone.beastPower[0], zone.beastPower[1]);
+    if (hero.stats.power >= beastPower) {
+      const loot = randInt(rng, zone.beastLootGold[0], zone.beastLootGold[1]);
       return {
-        ...hero,
-        hp: Math.min(hero.maxHp, hero.hp + HERO_REGEN_PER_SEC * (TICK_INTERVAL / 1000)),
+        kind: 'beast_win',
+        depth: hero.depth,
+        zoneId: zone.id,
+        value: loot,
+        message: `Slew a beast (pow ${beastPower})! +${loot} gold`,
+      };
+    } else {
+      const damage = randInt(rng, zone.trapDamage[0], zone.trapDamage[1]) + beastPower;
+      return {
+        kind: 'beast_lose',
+        depth: hero.depth,
+        zoneId: zone.id,
+        value: damage,
+        message: `Ambushed by a beast (pow ${beastPower})! -${damage} HP`,
       };
     }
+  }
 
-    // 3. Cooldown heroes: check if recovered
-    if (hero.status === 'cooldown' && now >= hero.cooldownEnd) {
-      changed = true;
-      return {
-        ...hero,
-        status: 'idle' as const,
-        hp: hero.maxHp,
-      };
-    }
+  // Nothing
+  return null;
+}
 
-    return hero;
-  });
+/** Apply an exploration event to the hero. */
+function applyExplorationEvent(
+  hero: Hero,
+  event: ExplorationEvent,
+  _rng: Rng,
+  _zone: ZoneData,
+): Hero {
+  let h = { ...hero };
 
-  if (!changed) return state;
+  switch (event.kind) {
+    case 'trap':
+      h.hp = Math.max(0, h.hp - event.value);
+      break;
+    case 'gold':
+      h.pendingLoot = { ...h.pendingLoot, gold: h.pendingLoot.gold + event.value };
+      break;
+    case 'heal':
+      h.hp = Math.min(h.stats.maxHp, h.hp + event.value);
+      break;
+    case 'beast_win':
+      // Some damage taken from combat (10-30% of beast power)
+      h.pendingLoot = { ...h.pendingLoot, gold: h.pendingLoot.gold + event.value };
+      h.hp = Math.max(0, h.hp - Math.floor(event.value * 0.2));
+      break;
+    case 'beast_lose':
+      h.hp = Math.max(0, h.hp - event.value);
+      break;
+  }
 
-  // Clean notifications older than 3s
-  const filteredNotifs = newNotifs.filter(n => now - n.time < 3000);
+  return h;
+}
 
-  const newState: GameState = {
-    ...state,
-    heroes,
-    gold: newGold,
-    inventory: newInv,
-    notifications: filteredNotifs,
+/** Hero returns home: transfer loot to a "ready to collect" state. */
+function heroReturnsHome(hero: Hero): Hero {
+  return {
+    ...hero,
+    status: 'idle',
+    depth: 0,
+    lastEventTime: 0,
+    // Keep pendingLoot — it gets collected when processed
+  };
+}
+
+// ─── SEND EXPEDITION ───
+
+function handleSendExpedition(state: GameState, heroId: number): GameState {
+  const hero = state.heroes.find(h => h.id === heroId);
+  if (!hero || hero.status !== 'idle' || hero.hp <= 0 || hero.deathTimer > 0) return state;
+
+  // First, collect any pending loot from previous expedition
+  let s = collectPendingLoot(state, heroId);
+
+  s = {
+    ...s,
+    heroes: s.heroes.map(h =>
+      h.id === heroId
+        ? {
+            ...h,
+            status: 'exploring' as const,
+            depth: 0,
+            pendingLoot: { gold: 0, ingredients: {} },
+            eventLog: [],
+            lastEventTime: 0,
+          }
+        : h,
+    ),
   };
 
-  // Store events for Phaser to consume
-  (newState as GameStateWithEvents).__events = events;
-
-  return newState;
+  return addNotification(s, `${hero.name} sets out exploring!`, 'info');
 }
 
-// ─── Loot Generation ───
+// ─── RECALL HERO ───
 
-interface LootResult {
-  ingredients: Record<string, number>;
-  gold: number;
-}
-
-function generateLoot(sessionSeed: number, hero: Hero): LootResult {
-  if (hero.zoneId === null) return { ingredients: {}, gold: 0 };
-
-  const zone = ZONES[hero.zoneId];
-  const rng = createRng(sessionSeed + hero.id * 10000 + hero.expStart);
-
-  const ingredients: Record<string, number> = {};
-
-  // Number of drops: 2..4
-  const numDrops = 2 + rng.nextInt(3);
-  for (let i = 0; i < numDrops; i++) {
-    const ing = zone.ingredients[rng.nextInt(5)];
-    const qty = 1 + rng.nextInt(3); // 1..3
-    ingredients[ing] = (ingredients[ing] || 0) + qty;
-  }
-
-  // Gold: base + random variance
-  const gold = zone.goldDropBase + rng.nextInt(zone.goldDropVariance + 1);
-
-  return { ingredients, gold };
-}
-
-// ─── Send Expedition ───
-
-function handleSendExpedition(state: GameState, heroId: number, zoneId: number): GameState {
+function handleRecallHero(state: GameState, heroId: number): GameState {
   const hero = state.heroes.find(h => h.id === heroId);
-  if (!hero || hero.status !== 'idle') return state;
+  if (!hero || hero.status !== 'exploring') return state;
 
-  const zone = ZONES[zoneId];
-  // Soft minimum: hero needs more HP than 2 ticks of damage to not instantly die
-  if (hero.hp <= zone.dps * 2) return state;
+  let s = {
+    ...state,
+    heroes: state.heroes.map(h =>
+      h.id === heroId ? heroReturnsHome(h) : h,
+    ),
+  };
 
-  const now = Date.now();
-  const heroes = state.heroes.map(h =>
-    h.id === heroId
-      ? {
-          ...h,
-          status: 'exploring' as const,
-          zoneId,
-          expStart: now,
-          expEnd: now + zone.duration * 1000,
-        }
-      : h
-  );
-
-  return { ...state, heroes };
+  s = collectPendingLoot(s, heroId);
+  return addNotification(s, `${hero.name} returns home with loot!`, 'info');
 }
 
-// ─── Crafting ───
+// ─── COLLECT PENDING LOOT ───
 
-function handleCraft(state: GameState, selectedIngredients: string[]): GameState {
-  const slots = selectedIngredients.filter(s => s !== '');
-  if (slots.length < 2) {
-    return { ...state, craftResult: { type: 'fail', text: 'Need at least 2 ingredients' } };
+function collectPendingLoot(state: GameState, heroId: number): GameState {
+  const hero = state.heroes.find(h => h.id === heroId);
+  if (!hero) return state;
+
+  const loot = hero.pendingLoot;
+  if (loot.gold === 0 && Object.keys(loot.ingredients).length === 0) return state;
+
+  const newInventory = { ...state.inventory };
+  newInventory.gold += loot.gold;
+
+  const newIngredients = { ...newInventory.ingredients };
+  for (const [name, qty] of Object.entries(loot.ingredients)) {
+    newIngredients[name] = (newIngredients[name] ?? 0) + qty;
   }
+  newInventory.ingredients = newIngredients;
 
-  // Validate inventory
-  const needed: Record<string, number> = {};
-  slots.forEach(s => {
-    needed[s] = (needed[s] || 0) + 1;
-  });
-  for (const [ing, count] of Object.entries(needed)) {
-    if ((state.inventory[ing] || 0) < count) {
-      return { ...state, craftResult: { type: 'fail', text: `Not enough ${ing}` } };
-    }
+  return {
+    ...state,
+    inventory: newInventory,
+    heroes: state.heroes.map(h =>
+      h.id === heroId
+        ? { ...h, pendingLoot: { gold: 0, ingredients: {} } as PendingLoot }
+        : h,
+    ),
+  };
+}
+
+// ─── CRAFTING ───
+
+function handleSetCraftSlot(
+  state: GameState,
+  slotIndex: number,
+  ingredientName: string | null,
+): GameState {
+  if (slotIndex < 0 || slotIndex >= CRAFT_SLOTS) return state;
+
+  const newSlots = [...state.craftSlots] as [typeof state.craftSlots[0], typeof state.craftSlots[1]];
+  newSlots[slotIndex] = { ingredientName };
+  return { ...state, craftSlots: newSlots };
+}
+
+function handleCraft(state: GameState): GameState {
+  const [slotA, slotB] = state.craftSlots;
+  if (!slotA.ingredientName || !slotB.ingredientName) return state;
+
+  // Check inventory
+  const inv = state.inventory;
+  const countA = inv.ingredients[slotA.ingredientName] ?? 0;
+  const countB = inv.ingredients[slotB.ingredientName] ?? 0;
+
+  // Handle same ingredient used in both slots
+  if (slotA.ingredientName === slotB.ingredientName) {
+    if (countA < 2) return state;
+  } else {
+    if (countA < 1 || countB < 1) return state;
   }
 
   // Consume ingredients
-  const newInv = { ...state.inventory };
-  for (const [ing, count] of Object.entries(needed)) {
-    newInv[ing] -= count;
-    if (newInv[ing] <= 0) delete newInv[ing];
+  const newIngredients = { ...inv.ingredients };
+  newIngredients[slotA.ingredientName] = (newIngredients[slotA.ingredientName] ?? 0) - 1;
+  newIngredients[slotB.ingredientName] = (newIngredients[slotB.ingredientName] ?? 0) - 1;
+
+  // Clean up zero-quantity entries
+  for (const key of Object.keys(newIngredients)) {
+    if (newIngredients[key] <= 0) delete newIngredients[key];
   }
 
-  // Generate combo key
-  const key = slots.slice().sort().join('|');
-  const testedCombos = new Set(state.testedCombos);
-  testedCombos.add(key);
+  let s: GameState = {
+    ...state,
+    inventory: { ...inv, ingredients: newIngredients },
+    craftAttempts: state.craftAttempts + 1,
+  };
 
-  // Check for recipe match
-  const matchedRecipe = state.recipes.find(
-    r => r.ingredients.join('|') === key && !state.discovered.includes(r.id)
-  );
+  // Look up recipe
+  const recipe = findRecipe(s.recipes, slotA.ingredientName, slotB.ingredientName);
 
-  const now = Date.now();
+  if (recipe) {
+    // Known or new recipe → produce potion
+    const isNewDiscovery = !recipe.discovered;
 
-  if (matchedRecipe) {
-    const discovered = [...state.discovered, matchedRecipe.id];
-    const won = discovered.length >= TOTAL_POTIONS;
-    const newNotifs: Notification[] = [
-      ...state.notifications,
-      {
-        id: nextNotifId(),
-        type: 'potion-found',
-        text: `Discovered: ${matchedRecipe.name}!`,
-        time: now,
-      },
-    ];
-
-    const newState: GameState = {
-      ...state,
-      inventory: newInv,
-      discovered,
-      testedCombos,
-      gold: state.gold + GOLD_PER_POTION_DISCOVERY,
-      notifications: newNotifs,
-      won,
-      craftResult: {
-        type: 'success',
-        text: `${matchedRecipe.name} (+${GOLD_PER_POTION_DISCOVERY}g)`,
-      },
-      craftSlots: ['', '', '', ''],
-    };
-    (newState as GameStateWithEvents).__events = [{ type: 'potion-discovered' }];
-    return newState;
-  }
-
-  // Progressive discovery probability
-  const progressiveChance = getProgressiveChance(
-    state.discovered.length,
-    testedCombos.size
-  );
-
-  const roll = createRng(state.seed + testedCombos.size * 7 + (now % 10000)).next();
-
-  if (roll < progressiveChance) {
-    const undiscovered = state.recipes.filter(r => !state.discovered.includes(r.id));
-    if (undiscovered.length > 0) {
-      const lucky = undiscovered[Math.floor(roll / Math.max(progressiveChance, 0.001) * undiscovered.length) % undiscovered.length];
-      const discovered = [...state.discovered, lucky.id];
-      const won = discovered.length >= TOTAL_POTIONS;
-      const newNotifs: Notification[] = [
-        ...state.notifications,
-        {
-          id: nextNotifId(),
-          type: 'potion-found',
-          text: `Lucky discovery: ${lucky.name}!`,
-          time: now,
+    if (isNewDiscovery) {
+      const newRecipes = s.recipes.map(r =>
+        r.id === recipe.id ? { ...r, discovered: true } : r,
+      );
+      const newCount = s.discoveredCount + 1;
+      s = {
+        ...s,
+        recipes: newRecipes,
+        discoveredCount: newCount,
+        inventory: {
+          ...s.inventory,
+          gold: s.inventory.gold + GOLD_PER_POTION_DISCOVERY,
+          potions: [
+            ...s.inventory.potions,
+            { recipeId: recipe.id, name: recipe.name, effect: recipe.effect },
+          ],
         },
-      ];
-
-      const newState: GameState = {
-        ...state,
-        inventory: newInv,
-        discovered,
-        testedCombos,
-        gold: state.gold + GOLD_PER_POTION_DISCOVERY,
-        notifications: newNotifs,
-        won,
-        craftResult: {
-          type: 'success',
-          text: `Lucky! ${lucky.name} (+${GOLD_PER_POTION_DISCOVERY}g)`,
-        },
-        craftSlots: ['', '', '', ''],
+        gameOver: newCount >= TOTAL_POTIONS,
       };
-      (newState as GameStateWithEvents).__events = [{ type: 'potion-discovered' }];
-      return newState;
+      s = addNotification(s, `Discovered: ${recipe.name}! +${GOLD_PER_POTION_DISCOVERY}g`, 'discovery');
+    } else {
+      // Already discovered — still produces a potion
+      s = {
+        ...s,
+        inventory: {
+          ...s.inventory,
+          potions: [
+            ...s.inventory.potions,
+            { recipeId: recipe.id, name: recipe.name, effect: recipe.effect },
+          ],
+        },
+      };
+      s = addNotification(s, `Brewed: ${recipe.name}`, 'success');
+    }
+  } else {
+    // No recipe match → check progressive probability for "lucky" discovery
+    const rng = createRng(s.seed ^ s.craftAttempts);
+    const progressiveChance = calculateProgressiveChance(s);
+
+    if (rng() < progressiveChance) {
+      // Lucky discovery: find a random undiscovered recipe
+      const undiscovered = s.recipes.filter(r => !r.discovered);
+      if (undiscovered.length > 0) {
+        const luckyRng = createRng(s.seed ^ (s.craftAttempts * 31));
+        const luckyRecipe = undiscovered[Math.floor(luckyRng() * undiscovered.length)];
+        const newRecipes = s.recipes.map(r =>
+          r.id === luckyRecipe.id ? { ...r, discovered: true } : r,
+        );
+        const newCount = s.discoveredCount + 1;
+        s = {
+          ...s,
+          recipes: newRecipes,
+          discoveredCount: newCount,
+          inventory: {
+            ...s.inventory,
+            gold: s.inventory.gold + GOLD_PER_POTION_DISCOVERY + SOUP_GOLD_VALUE,
+            potions: [
+              ...s.inventory.potions,
+              { recipeId: luckyRecipe.id, name: luckyRecipe.name, effect: luckyRecipe.effect },
+            ],
+          },
+          gameOver: newCount >= TOTAL_POTIONS,
+        };
+        s = addNotification(s, `Lucky discovery: ${luckyRecipe.name}! +${GOLD_PER_POTION_DISCOVERY}g`, 'discovery');
+      }
+    } else {
+      // Failure → soup
+      s = {
+        ...s,
+        inventory: { ...s.inventory, gold: s.inventory.gold + SOUP_GOLD_VALUE },
+      };
+      s = addNotification(s, `Failed brew → Mysterious Soup (+${SOUP_GOLD_VALUE}g)`, 'info');
     }
   }
 
-  return {
-    ...state,
-    inventory: newInv,
-    testedCombos,
-    craftResult: { type: 'fail', text: 'Nothing happened... ingredients lost.' },
-    craftSlots: ['', '', '', ''],
-  };
+  // Clear craft slots
+  s = { ...s, craftSlots: [{ ingredientName: null }, { ingredientName: null }] };
+  return s;
 }
 
-function getProgressiveChance(discoveredCount: number, testedCount: number): number {
-  const remaining = TOTAL_POTIONS - discoveredCount;
+/** Progressive probability: prevents deadlocks as grimoire completion rises. */
+function calculateProgressiveChance(state: GameState): number {
+  const completion = state.discoveredCount / TOTAL_POTIONS;
+  const remaining = TOTAL_POTIONS - state.discoveredCount;
+  const remainingCombos = TOTAL_POSSIBLE_2_COMBOS - state.craftAttempts;
+
+  // As more recipes are discovered and attempts increase, chance rises
   if (remaining <= 0) return 0;
-
-  const testedRatio = testedCount / TOTAL_POSSIBLE_2_COMBOS;
-
-  // Exponential ramp: barely noticeable early, strong late
-  const chance = Math.pow(testedRatio, PROGRESSIVE_EXPONENT) * 0.6;
-
-  // Guarantee: last potion + 90%+ tested -> 100%
-  if (remaining === 1 && testedRatio > 0.9) return 1.0;
-
-  return Math.min(chance, PROGRESSIVE_CAP);
+  const base = Math.pow(completion, PROGRESSIVE_EXPONENT);
+  const attemptFactor = Math.max(0, 1 - remainingCombos / TOTAL_POSSIBLE_2_COMBOS);
+  return Math.min(PROGRESSIVE_CAP, base * 0.3 + attemptFactor * 0.2);
 }
 
-// ─── Recruit Hero ───
+// ─── SELL SOUP ───
 
-function handleRecruit(state: GameState): GameState {
-  const idx = state.heroes.length;
-  if (idx >= MAX_HEROES) return state;
-  const cost = HERO_COSTS[idx];
-  if (state.gold < cost) return state;
+function handleSellSoup(state: GameState): GameState {
+  // Soup is auto-sold during crafting, this is a no-op but kept for action parity
+  return state;
+}
 
-  const newHero: Hero = {
-    id: idx,
-    name: HERO_NAMES[idx],
-    hp: HERO_MAX_HP,
-    maxHp: HERO_MAX_HP,
-    status: 'idle',
-    zoneId: null,
-    expStart: 0,
-    expEnd: 0,
-    cooldownEnd: 0,
+// ─── APPLY POTION ───
+
+function handleApplyPotion(state: GameState, potionIndex: number, heroId: number): GameState {
+  const hero = state.heroes.find(h => h.id === heroId);
+  if (!hero) return state;
+
+  const potion = state.inventory.potions[potionIndex];
+  if (!potion) return state;
+
+  // Apply effect to hero stats (permanent, consumed)
+  const updatedHeroes = state.heroes.map(h => {
+    if (h.id !== heroId) return h;
+    const newStats = { ...h.stats };
+    switch (potion.effect.type) {
+      case 'max_hp':
+        newStats.maxHp += potion.effect.value;
+        return { ...h, stats: newStats, hp: Math.min(h.hp + potion.effect.value, newStats.maxHp) };
+      case 'power':
+        newStats.power += potion.effect.value;
+        return { ...h, stats: newStats };
+      case 'regen_speed':
+        newStats.regenPerSec += potion.effect.value;
+        return { ...h, stats: newStats };
+      default:
+        return h;
+    }
+  });
+
+  // Remove potion from inventory
+  const newPotions = [...state.inventory.potions];
+  newPotions.splice(potionIndex, 1);
+
+  let s: GameState = {
+    ...state,
+    heroes: updatedHeroes,
+    inventory: { ...state.inventory, potions: newPotions },
   };
 
+  const effectLabel =
+    potion.effect.type === 'max_hp' ? `+${potion.effect.value} Max HP` :
+    potion.effect.type === 'power' ? `+${potion.effect.value} Power` :
+    `+${potion.effect.value} HP/s Regen`;
+
+  return addNotification(s, `${hero.name} consumed ${potion.name}: ${effectLabel}`, 'success');
+}
+
+// ─── RECRUIT HERO ───
+
+function handleRecruitHero(state: GameState): GameState {
+  if (state.heroes.length >= MAX_HEROES) return state;
+
+  const cost = HERO_COSTS[state.heroes.length];
+  if (state.inventory.gold < cost) return state;
+
+  const newHero = createHero(state.heroes.length);
+  return addNotification(
+    {
+      ...state,
+      heroes: [...state.heroes, newHero],
+      inventory: { ...state.inventory, gold: state.inventory.gold - cost },
+    },
+    `Recruited ${newHero.name}! (-${cost}g)`,
+    'success',
+  );
+}
+
+// ─── NOTIFICATIONS ───
+
+function addNotification(
+  state: GameState,
+  message: string,
+  type: GameNotification['type'],
+): GameState {
+  const notification: GameNotification = {
+    id: state.nextNotificationId,
+    message,
+    type,
+    timestamp: state.elapsedMs,
+  };
   return {
     ...state,
-    gold: state.gold - cost,
-    heroes: [...state.heroes, newHero],
+    notifications: [...state.notifications, notification],
+    nextNotificationId: state.nextNotificationId + 1,
   };
-}
-
-// ─── Set Craft Slot ───
-
-function handleSetCraftSlot(state: GameState, slotIdx: number, value: string): GameState {
-  const craftSlots = [...state.craftSlots];
-  craftSlots[slotIdx] = value;
-  return { ...state, craftSlots, craftResult: null };
-}
-
-// ─── Event System (for Phaser) ───
-
-export interface GameEvent {
-  type: 'hero-died' | 'expedition-complete' | 'potion-discovered';
-  zoneId?: number;
-}
-
-export interface GameStateWithEvents extends GameState {
-  __events?: GameEvent[];
-}
-
-export function consumeEvents(state: GameState): GameEvent[] {
-  const events = (state as GameStateWithEvents).__events || [];
-  delete (state as GameStateWithEvents).__events;
-  return events;
 }

@@ -1,42 +1,53 @@
-import React from 'react';
-import type { Recipe } from '../game/state';
+import type { GameState } from '../game/state';
+import { TOTAL_POTIONS } from '../game/constants';
 
-interface GrimoirePanelProps {
-  recipes: Recipe[];
-  discovered: number[];
-  lastDiscoveredId: number | null;
+interface Props {
+  state: GameState;
 }
 
-export const GrimoirePanel: React.FC<GrimoirePanelProps> = ({
-  recipes,
-  discovered,
-  lastDiscoveredId,
-}) => {
-  return (
-    <div className="grimoire-panel">
-      <h2>Grimoire</h2>
-      <div className="grimoire-grid">
-        {recipes.map((recipe) => {
-          const isDiscovered = discovered.includes(recipe.id);
-          const isJustFound = recipe.id === lastDiscoveredId;
-          
-          let className = 'grimoire-slot';
-          if (isDiscovered) className += ' discovered';
-          else className += ' unknown';
-          
-          if (isJustFound) className += ' just-found';
+export function GrimoirePanel({ state }: Props) {
+  const discovered = state.recipes.filter(r => r.discovered);
+  const undiscoveredCount = TOTAL_POTIONS - discovered.length;
+  const progressPct = (discovered.length / TOTAL_POTIONS) * 100;
 
-          return (
-            <div
-              key={recipe.id}
-              className={className}
-              title={isDiscovered ? recipe.ingredients.join(', ') : undefined}
-            >
-              {isDiscovered ? recipe.name : '????'}
-            </div>
-          );
-        })}
+  return (
+    <section className="panel grimoire-panel">
+      <h2 className="panel-title">
+        <span>Grimoire ({discovered.length}/{TOTAL_POTIONS})</span>
+        <span className="grimoire-meter">
+          <span
+            className="grimoire-meter-fill"
+            style={{ width: `${progressPct}%` }}
+          />
+        </span>
+      </h2>
+      <div className="grimoire-grid">
+        {discovered.map(recipe => (
+          <div key={recipe.id} className="grimoire-entry discovered">
+            <span className="recipe-name">{recipe.name}</span>
+            <span className="recipe-ingredients">
+              {recipe.ingredients[0]} + {recipe.ingredients[1]}
+            </span>
+            <span className="recipe-effect">
+              {formatEffect(recipe.effect.type, recipe.effect.value)}
+            </span>
+          </div>
+        ))}
+        {Array.from({ length: undiscoveredCount }).map((_, i) => (
+          <div key={`undiscovered-${i}`} className="grimoire-entry undiscovered">
+            ???
+          </div>
+        ))}
       </div>
-    </div>
+    </section>
   );
-};
+}
+
+function formatEffect(type: string, value: number): string {
+  switch (type) {
+    case 'max_hp': return `+${value} Max HP`;
+    case 'power': return `+${value} Power`;
+    case 'regen_speed': return `+${value} HP/s`;
+    default: return `+${value}`;
+  }
+}

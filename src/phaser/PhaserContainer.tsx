@@ -1,53 +1,40 @@
-import React, { useEffect, useRef } from 'react';
+import { useEffect, useRef, type MutableRefObject } from 'react';
 import Phaser from 'phaser';
-import { createPhaserConfig } from './config';
 import { AlchemistScene } from './AlchemistScene';
 import type { GameState } from '../game/state';
 
-interface PhaserContainerProps {
-  gameStateRef: React.RefObject<GameState | null>;
-  onZoneClick: (zoneId: number) => void;
+interface Props {
+  stateRef: MutableRefObject<GameState>;
 }
 
-export const PhaserContainer: React.FC<PhaserContainerProps> = ({
-  gameStateRef,
-  onZoneClick,
-}) => {
+export function PhaserContainer({ stateRef }: Props) {
   const containerRef = useRef<HTMLDivElement>(null);
   const gameRef = useRef<Phaser.Game | null>(null);
 
   useEffect(() => {
     if (!containerRef.current || gameRef.current) return;
 
-    const scene = new AlchemistScene();
-    scene.gameStateRef = gameStateRef;
-    scene.onZoneClick = onZoneClick;
+    const scene = new AlchemistScene(stateRef);
 
-    const config = createPhaserConfig(containerRef.current, scene);
-    gameRef.current = new Phaser.Game(config);
+    gameRef.current = new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: containerRef.current,
+      width: 600,
+      height: 500,
+      backgroundColor: '#1a1a2e',
+      scene: [scene],
+      scale: {
+        mode: Phaser.Scale.FIT,
+        autoCenter: Phaser.Scale.CENTER_BOTH,
+      },
+      audio: { noAudio: true },
+    });
 
     return () => {
-      if (gameRef.current) {
-        gameRef.current.destroy(true);
-        gameRef.current = null;
-      }
+      gameRef.current?.destroy(true);
+      gameRef.current = null;
     };
-  }, []);
+  }, [stateRef]);
 
-  // Update scene callbacks when they change
-  useEffect(() => {
-    if (!gameRef.current) return;
-    const scene = gameRef.current.scene.getScene('AlchemistScene') as AlchemistScene;
-    if (scene) {
-      scene.gameStateRef = gameStateRef;
-      scene.onZoneClick = onZoneClick;
-    }
-  }, [gameStateRef, onZoneClick]);
-
-  return (
-    <div
-      ref={containerRef}
-      style={{ width: '100%', height: '100%' }}
-    />
-  );
-};
+  return <div ref={containerRef} className="phaser-container" />;
+}

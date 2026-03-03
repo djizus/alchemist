@@ -1,20 +1,24 @@
-import React from 'react';
-import type { Notification } from '../game/state';
+import type { GameState, GameAction } from '../game/state';
 
-interface NotificationsProps {
-  notifications: Notification[];
-  now: number;
+interface Props {
+  state: GameState;
+  dispatch: (action: GameAction) => void;
 }
 
-export const Notifications: React.FC<NotificationsProps> = ({ notifications, now }) => {
-  const visible = notifications.filter(n => now - n.time < 3000);
+export function Notifications({ state, dispatch }: Props) {
+  if (state.notifications.length === 0) return null;
+
   return (
-    <>
-      {visible.map((notif) => (
-        <div key={notif.id} className={`notif ${notif.type}`}>
-          {notif.text}
+    <div className="notifications">
+      {state.notifications.slice(-5).map(n => (
+        <div
+          key={n.id}
+          className={`notification notification-${n.type}`}
+          onClick={() => dispatch({ type: 'DISMISS_NOTIFICATION', id: n.id })}
+        >
+          {n.message}
         </div>
       ))}
-    </>
+    </div>
   );
-};
+}

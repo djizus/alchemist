@@ -2,11 +2,11 @@
 
 ## Project Overview
 
-Alchemist is a competitive grimoire-completion race game. Players explore zones, gather ingredients, and craft potions through experimentation. Currently in V0 (browser PoC), targeting V1 on Starknet.
+Alchemist is a competitive grimoire-completion race game. Players send heroes on linear expeditions through increasingly dangerous zones, gather ingredients, and craft potions through experimentation. Currently in V0 (browser PoC), targeting V1 on Starknet.
 
 ## Tech Stack
 
-- **Runtime**: TypeScript, React 18, Phaser 3, Vite
+- **Runtime**: TypeScript, React 19, Phaser 3, Vite
 - **Package Manager**: pnpm
 - **Target**: V1 will be Starknet (Cairo smart contracts) + client
 
@@ -35,46 +35,66 @@ React (state + logic) --ref--> Phaser (render only)
 
 | File | What it does |
 |------|-------------|
-| `src/game/constants.ts` | All balancing levers. Change game tuning here. |
-| `src/game/engine.ts` | Core reducer: tick (100ms), craft, recruit, expedition logic |
-| `src/game/recipes.ts` | Deterministic recipe generation (4-phase algorithm) |
-| `src/game/rng.ts` | Mulberry32 seeded RNG |
-| `src/game/state.ts` | All TypeScript interfaces (GameState, Hero, Recipe, etc.) |
-| `src/phaser/AlchemistScene.ts` | Zone nodes, hero sprites, particles, progress arcs |
+| `src/game/constants.ts` | All balancing levers: zones, event probabilities, hero stats, crafting params |
+| `src/game/engine.ts` | Core reducer: tick (100ms), exploration events, crafting, potion application, hero management |
+| `src/game/recipes.ts` | Deterministic 30-recipe generation from seed (all 2-ingredient) |
+| `src/game/rng.ts` | Mulberry32 seeded RNG + helpers (randInt, randPick, shuffle) |
+| `src/game/state.ts` | All TypeScript interfaces (GameState, Hero, Recipe, ExplorationEvent, etc.) |
+| `src/phaser/AlchemistScene.ts` | Zone track visualization, hero sprites, HP bars |
+| `src/phaser/PhaserContainer.tsx` | React ↔ Phaser bridge component |
 | `src/App.tsx` | Root component, wires state to Phaser + UI |
 
 ## Game Mechanics (Quick Reference)
 
-### Zones (5 total, all accessible from start)
+### Exploration (Linear Zone Progression)
 
-| Zone | Tier | Duration | DPS | HP Cost | Gold |
-|------|------|----------|-----|---------|------|
-| Verdant Meadow | D | 8s | 1.25 | 10 | 5+0 |
-| Misty Marsh | C | 15s | 2.0 | 30 | 10+5 |
-| Crystal Cavern | B | 25s | 2.2 | 55 | 18+10 |
-| Volcanic Ridge | A | 40s | 1.875 | 75 | 28+15 |
-| Aether Spire | S | 60s | 1.58 | 95 | 40+20 |
+Heroes auto-advance through zones continuously. Depth = seconds explored. The hero cannot choose which zone to visit — they progress linearly until HP runs out, then retreat with all accumulated loot.
+
+| Zone | Tier | Depth Threshold | Key Danger |
+|------|------|----------------|------------|
+| Verdant Meadow | D | 0s | Low traps, weak beasts |
+| Misty Marsh | C | 15s | Moderate traps + beasts |
+| Crystal Cavern | B | 35s | Higher trap damage, stronger beasts |
+| Volcanic Ridge | A | 60s | Heavy damage, powerful beasts |
+| Aether Spire | S | 90s | Maximum danger, best loot |
+
+### Exploration Events (every 1 second)
+
+Each second, a random event rolls against the current zone's probabilities:
+- **Trap** — Hero loses HP (zone-scaled damage)
+- **Gold** — Hero finds gold
+- **Heal** — Hero recovers HP
+- **Beast** — Auto-resolved by power. Win = gold loot + minor damage. Lose = heavy damage.
+- **Nothing** — No event (remainder probability)
+- **Ingredient Drop** — Independent roll; hero collects zone-specific ingredients
 
 ### Heroes
 
 - Max 3, costs [0, 80, 200] gold
-- 100 HP, 5 HP/s regen when idle
-- 10s cooldown on death, revive at full HP
-- Continuous DPS: hero loses `zone.dps * 0.1` HP per tick (100ms)
+- Base stats: 100 HP, 5 Power, 1 HP/s regen when idle
+- Stats are permanently buffed by consuming potions
+- At 0 HP: hero retreats home with ALL accumulated loot
+- Regen: 1 HP/s base (improved by regen potions)
 
-### Recipes
+### Recipes & Crafting
 
-- 50 total: ~32 two-ingredient, ~13 three-ingredient, ~5 four-ingredient
+- **30 recipes total**, ALL 2-ingredient combinations
 - Generated deterministically from session seed
 - Pinned ingredients guarantee all zones must be explored
-- Progressive probability prevents deadlocks (exponential ramp)
+- **Crafting**: Select 2 ingredients → Brew
+  - **Match** → Recipe discovered (or re-brewed), potion added to inventory, +15g bonus on first discovery
+  - **No match** → Mysterious Soup (sells for 1 gold)
+- Progressive probability prevents deadlocks on late-game recipes
 
-### Crafting
+### Potions
 
-- Instant, no timers
-- Ingredients consumed even on failure
-- No proximity feedback — pure experimentation
-- Win condition: discover all 50 potions
+- **Consumable**: Crafting produces a potion item in inventory
+- **Application**: Give potion to a hero → consumed, permanently buffs their stats
+- **Effect types**: `max_hp` (+5–20), `power` (+1–5), `regen_speed` (+1–3 HP/s)
+
+### Win Condition
+
+Discover all 30 recipes in the grimoire.
 
 ## Coding Conventions
 
@@ -95,4 +115,4 @@ pnpm build        # Production build
 
 ## Design Document
 
-Full spec at [Alchemist_Consolidated.md](Alchemist_Consolidated.md) — covers all game systems, balancing levers, V1 onchain architecture, and open design questions.
+Full spec at [Alchemist_Consolidated.md](Alchemist_Consolidated.md) — covers all game systems, balancing levers, V1 onchain architecture, and open design questions. Note: some details in the consolidated spec are from the original design and have been superseded by the V0 redesign documented above.

@@ -1,34 +1,38 @@
-import React from 'react';
+import type { GameState } from '../game/state';
+import { TOTAL_POTIONS } from '../game/constants';
 
-interface TopBarProps {
-  gold: number;
-  discoveredCount: number;
-  totalPotions: number;
-  elapsedSeconds: number;
+interface Props {
+  state: GameState;
+  onReset: () => void;
 }
 
-export const TopBar: React.FC<TopBarProps> = ({
-  gold,
-  discoveredCount,
-  totalPotions,
-  elapsedSeconds,
-}) => {
-  const minutes = Math.floor(elapsedSeconds / 60);
-  const seconds = Math.floor(elapsedSeconds % 60);
-  const timeString = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+export function TopBar({ state, onReset }: Props) {
+  const minutes = Math.floor(state.elapsedMs / 60000);
+  const seconds = Math.floor((state.elapsedMs % 60000) / 1000);
+  const timeStr = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+  const progressPct = (state.discoveredCount / TOTAL_POTIONS) * 100;
 
   return (
-    <div className="topbar">
-      <div className="gold">
-        <span>✨</span> {Math.floor(gold)} gold
+    <header className="top-bar">
+      <div className="top-bar-left">
+        <h1 className="game-title">Alchemist</h1>
+        <span className="timer">{timeStr}</span>
       </div>
-      <h1>ALCHEMIST</h1>
-      <div style={{ display: 'flex', gap: '16px', alignItems: 'center' }}>
-        <div className="grimoire-progress">
-          📖 {discoveredCount}/{totalPotions}
-        </div>
-        <div className="session-info">{timeString}</div>
+      <div className="top-bar-center">
+        <span className="gold-display">{state.inventory.gold} Gold</span>
+        <span className="grimoire-progress">
+          {state.discoveredCount}/{TOTAL_POTIONS}
+          <span className="grimoire-progress-bar">
+            <span
+              className="grimoire-progress-fill"
+              style={{ width: `${progressPct}%` }}
+            />
+          </span>
+        </span>
       </div>
-    </div>
+      <div className="top-bar-right">
+        <button className="btn btn-danger" onClick={onReset}>New Game</button>
+      </div>
+    </header>
   );
-};
+}
