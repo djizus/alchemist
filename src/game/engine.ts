@@ -607,6 +607,7 @@ function handleCraftAll(state: GameState): GameState {
   }
 
   s = { ...s, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: null }] };
+  s = autoSelectNextIngredient(s);
   return s;
 }
 
@@ -685,10 +686,57 @@ function handleCraftNext(state: GameState): GameState {
     // Found next untried: set slot 2 and brew
     let s: GameState = { ...state, craftSlots: [{ ingredientName: baseIngredient }, { ingredientName: partner }] };
     s = handleCraft(s);
+    // After brewing, check if this ingredient still has untried combos
+    // If not, auto-select the next ingredient that does
+    s = autoSelectNextIngredient(s);
     return s;
   }
 
-  return addNotification(state, 'No more untried combos with this ingredient', 'info');
+  // No more combos — auto-advance to next ingredient
+  let s = autoSelectNextIngredient(state);
+  if (s.craftSlots[0].ingredientName === baseIngredient) {
+    return addNotification(state, 'No more untried combos', 'info');
+  }
+  return s;
+}
+
+/** Auto-select the next ingredient that has untried combos. */
+function autoSelectNextIngredient(state: GameState): GameState {
+  const current = state.craftSlots[0].ingredientName;
+  const inv = state.inventory.ingredients;
+  const allOwned = Object.keys(inv).filter(k => (inv[k] ?? 0) > 0).sort();
+
+  // Check if current ingredient still has untried combos
+  if (current && hasUntriedCombos(state, current)) {
+    return state;
+  }
+
+  // Find next ingredient with untried combos
+  const startIdx = current ? allOwned.indexOf(current) + 1 : 0;
+  const ordered = [...allOwned.slice(startIdx), ...allOwned.slice(0, startIdx)];
+
+  for (const name of ordered) {
+    if (hasUntriedCombos(state, name)) {
+      return { ...state, craftSlots: [{ ingredientName: name }, { ingredientName: null }] };
+    }
+  }
+
+  // Nothing left — clear slot
+  return { ...state, craftSlots: [{ ingredientName: null }, { ingredientName: null }] };
+}
+
+/** Check if an ingredient has any untried combinations. */
+function hasUntriedCombos(state: GameState, base: string): boolean {
+  const inv = state.inventory.ingredients;
+  for (const partner of Object.keys(inv)) {
+    if (partner === base && (inv[partner] ?? 0) < 2) continue;
+    if ((inv[partner] ?? 0) < 1) continue;
+    const recipe = findRecipe(state.recipes, base, partner);
+    if (recipe?.discovered) continue;
+    if (isFailedCombo(state, base, partner)) continue;
+    return true;
+  }
+  return false;
 }
 
 /** Buy a hint: reveal one ingredient of a random undiscovered recipe. */
