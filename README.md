@@ -70,7 +70,7 @@ React owns all game state via `useReducer`. UI is pure React (no game engine). G
 ```
 React (state + logic) → UI (render only)
        |
-       └── dispatch(action) -- TICK | SEND_EXPEDITION | RECALL_HERO | CLAIM_LOOT | CRAFT | APPLY_POTION | RECRUIT_HERO | RESET
+       └── dispatch(action) -- TICK | SEND_EXPEDITION | CLAIM_LOOT | CRAFT | CRAFT_NEXT | CRAFT_ALL | CRAFT_RECIPE | BUY_HINT | APPLY_POTION | RECRUIT_HERO | RESET
 ```
 
 ### Key Design Decisions
@@ -80,15 +80,9 @@ React (state + logic) → UI (render only)
 - **Deterministic**: Seeded RNG means same seed = same recipes, same event rolls
 - **Beast combat**: Auto-resolved by hero power vs beast power
 - **Consumable potions**: Craft a potion, then give it to a hero for permanent stat buffs
-- **No hints**: Recipe discovery is pure experimentation
+- **Hint system**: Spend gold (exponential cost) to reveal one ingredient of a random undiscovered recipe
 - **Progressive probability**: Safety net prevents hard deadlocks on last few recipes
+- **Background play**: Game continues when tab is out of focus (catch-up ticks)
+- **Persistent**: State auto-saved to localStorage every 2 seconds
 
-### Version Roadmap
-
-| Version | Description |
-|---------|-------------|
-| **V0** | Browser PoC (current) — validate the loop |
-| **V1** | Onchain PvE race — Starknet smart contracts, competitive multiplayer |
-| **V2+** | PvP exploration, hero upgrades, gear, scoring |
-
-See [Alchemist_Consolidated.md](Alchemist_Consolidated.md) for the full design document.
+See [Alchemist_POC.md](Alchemist_POC.md) for the full system specification.

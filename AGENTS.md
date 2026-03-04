@@ -78,9 +78,11 @@ Each second, a random event rolls against the current zone's probabilities:
 - **30 recipes total**, ALL 2-ingredient combinations
 - Generated deterministically from session seed
 - Pinned ingredients guarantee all zones must be explored
-- **Crafting**: Select 2 ingredients → Brew
-  - **Match** → Recipe discovered (or re-brewed), potion added to inventory, +15g bonus on first discovery
+- **Crafting**: Select 1 ingredient → Brew Untried cycles through partners
+  - **Match** → Recipe discovered (or re-brewed), potion added to inventory
   - **No match** → Mysterious Soup (sells for 1 gold)
+- Grimoire panel for re-brewing known recipes (Brew xN)
+- Hint system: spend gold (10 x 3^n) to reveal one ingredient of an undiscovered recipe
 - Progressive probability prevents deadlocks on late-game recipes
 
 ### Potions
@@ -98,7 +100,6 @@ Discover all 30 recipes in the grimoire.
 - **No `as any`** or `@ts-ignore`. Strict TypeScript.
 - **Game logic in `src/game/`** — keep it framework-agnostic for V1 Cairo port.
 - **UI components are stateless** — props in, JSX out.
-- **UI components are stateless** — props in, JSX out.
 - **All constants in `constants.ts`** — single source for balancing levers.
 - **Seeded RNG everywhere** — `createRng(seed)` for determinism.
 
@@ -112,4 +113,4 @@ pnpm build        # Production build
 
 ## Design Document
 
-Full spec at [Alchemist_Consolidated.md](Alchemist_Consolidated.md) — covers all game systems, balancing levers, V1 onchain architecture, and open design questions. Note: some details in the consolidated spec are from the original design and have been superseded by the V0 redesign documented above.
+Full spec at [Alchemist_POC.md](Alchemist_POC.md) — detailed system-by-system breakdown of the current V0 implementation.
