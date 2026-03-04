@@ -17,9 +17,14 @@ export function CraftPanel({ state, dispatch }: Props) {
     name => (inv[name] ?? 0) > 0,
   );
 
+  // If selected ingredient is no longer in inventory, clear it
+  const selected = slotA.ingredientName && available.includes(slotA.ingredientName)
+    ? slotA.ingredientName
+    : null;
+
   // Count untried combos with the selected ingredient
-  const untriedCount = slotA.ingredientName
-    ? countUntriedCombos(state, slotA.ingredientName)
+  const untriedCount = selected
+    ? countUntriedCombos(state, selected)
     : 0;
 
   return (
@@ -29,7 +34,7 @@ export function CraftPanel({ state, dispatch }: Props) {
         <label className="craft-slot-label">Ingredient</label>
         <select
           className="craft-select"
-          value={slotA.ingredientName ?? ''}
+          value={selected ?? ''}
           onChange={e => dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: e.target.value || null })}
         >
           <option value="">— Select —</option>
