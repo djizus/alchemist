@@ -12,7 +12,7 @@ export class ZoneBackground {
   private readonly container: Phaser.GameObjects.Container;
   private readonly currentBackground: Phaser.GameObjects.Image;
   private readonly transitionBackground: Phaser.GameObjects.Image;
-  private currentBackgroundKey = 'lab-bg';
+  private targetBackgroundKey = 'lab-bg';
   private readonly ambientLayers: AmbientLayer[] = [];
 
   constructor(scene: Phaser.Scene, container?: Phaser.GameObjects.Container) {
@@ -57,9 +57,11 @@ export class ZoneBackground {
   }
 
   private crossfadeBackground(nextKey: string): void {
-    if (this.currentBackgroundKey === nextKey) {
+    if (this.targetBackgroundKey === nextKey) {
       return;
     }
+
+    this.targetBackgroundKey = nextKey;
 
     this.scene.tweens.killTweensOf(this.currentBackground);
     this.scene.tweens.killTweensOf(this.transitionBackground);
@@ -83,7 +85,6 @@ export class ZoneBackground {
         this.currentBackground.setTexture(nextKey);
         this.currentBackground.setAlpha(1);
         this.transitionBackground.setAlpha(0);
-        this.currentBackgroundKey = nextKey;
       },
     });
   }
