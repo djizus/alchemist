@@ -1,7 +1,3 @@
-// ═══════════════════════════════════════════════
-// PhaserBridge — React state bridge for Phaser scenes
-// ═══════════════════════════════════════════════
-
 import Phaser from 'phaser';
 import type { GameNotification, GameState, Hero } from '../game/state';
 
@@ -30,6 +26,7 @@ export interface NotificationPayload {
 
 export class PhaserBridge extends Phaser.Events.EventEmitter {
   private gameInstance: Phaser.Game | null = null;
+  private _focusedHeroId: number | null = null;
 
   setGame(game: Phaser.Game | null): void {
     this.gameInstance = game;
@@ -39,10 +36,19 @@ export class PhaserBridge extends Phaser.Events.EventEmitter {
     return this.gameInstance;
   }
 
-  updateState(state: GameState, prevState: GameState | null): void {
-    this.emit('stateChange', state);
+  get focusedHeroId(): number | null {
+    return this._focusedHeroId;
+  }
 
+  setFocusedHero(heroId: number | null): void {
+    if (this._focusedHeroId === heroId) return;
+    this._focusedHeroId = heroId;
+    this.emit('focusedHeroChange', heroId);
+  }
+
+  updateState(state: GameState, prevState: GameState | null): void {
     if (!prevState) {
+      this.emit('stateChange', state);
       for (const hero of state.heroes) {
         this.emit('heroChange', { hero, previousHero: null } satisfies HeroChangePayload);
       }
@@ -56,10 +62,13 @@ export class PhaserBridge extends Phaser.Events.EventEmitter {
     }
 
     const previousHeroesById = new Map(prevState.heroes.map((hero) => [hero.id, hero]));
+    let anyHeroChanged = false;
+
     for (const hero of state.heroes) {
       const previousHero = previousHeroesById.get(hero.id) ?? null;
       if (!previousHero || this.didHeroChange(previousHero, hero)) {
         this.emit('heroChange', { hero, previousHero } satisfies HeroChangePayload);
+        anyHeroChanged = true;
       }
 
       const previousEventCount = previousHero?.eventLog.length ?? 0;
@@ -72,6 +81,10 @@ export class PhaserBridge extends Phaser.Events.EventEmitter {
           } satisfies ExplorationTickPayload);
         }
       }
+    }
+
+    if (anyHeroChanged || state.heroes.length !== prevState.heroes.length) {
+      this.emit('stateChange', state);
     }
 
     if (state.craftAttempts !== prevState.craftAttempts) {

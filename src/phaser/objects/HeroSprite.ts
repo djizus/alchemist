@@ -6,6 +6,8 @@ import { EventEffect } from './EventEffect';
 
 export const HERO_TINTS = [0x4080d0, 0x40c060, 0xa050d0];
 
+const HERO_PORTRAIT_KEYS = ['hero-alaric', 'hero-brynn', 'hero-cassiel'];
+const PORTRAIT_SIZE = 48;
 const HERO_EXPLORE_RANGE = 220;
 const HP_BAR_WIDTH = 40;
 
@@ -24,6 +26,13 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   private bobTween: Phaser.Tweens.Tween;
   private auraTween: Phaser.Tweens.Tween | null = null;
   private hpTween: Phaser.Tweens.Tween | null = null;
+  private moveTween: Phaser.Tweens.Tween | null = null;
+
+  private lastStatus: string = '';
+  private lastHpRatio = -1;
+  private lastTargetX = -1;
+  private lastDefeated = false;
+  private maskGraphics: Phaser.GameObjects.Graphics | null = null;
 
   constructor(
     scene: Phaser.Scene,
@@ -51,13 +60,32 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.hpFill = scene.add.rectangle(-HP_BAR_WIDTH / 2, -44, HP_BAR_WIDTH, 4, COLORS.hpGreen, 1);
     this.hpFill.setOrigin(0, 0.5);
 
-    const head = scene.add.circle(0, -4, 24, this.heroTint, 1);
-    const body = scene.add.triangle(0, 32, -16, -8, 16, -8, 0, 26, this.heroTint, 0.9);
+    // Try to use portrait image; fall back to geometric shapes
+    const portraitKey = HERO_PORTRAIT_KEYS[heroIndex];
+    const hasPortrait = portraitKey && scene.textures.exists(portraitKey);
+
+    const bodyParts: Phaser.GameObjects.GameObject[] = [];
+
+    if (hasPortrait) {
+      const portrait = scene.add.image(0, 8, portraitKey);
+      portrait.setDisplaySize(PORTRAIT_SIZE, PORTRAIT_SIZE);
+      portrait.setOrigin(0.5, 0.5);
+      const maskShape = scene.make.graphics({ x: 0, y: 0 });
+      maskShape.fillCircle(0, 0, PORTRAIT_SIZE / 2);
+      portrait.setMask(new Phaser.Display.Masks.GeometryMask(scene, maskShape));
+      this.maskGraphics = maskShape;
+      this.sceneRef.events.on(Phaser.Scenes.Events.PRE_UPDATE, this.updateMaskPosition, this);
+      bodyParts.push(portrait);
+    } else {
+      const head = scene.add.circle(0, -4, 24, this.heroTint, 1);
+      const body = scene.add.triangle(0, 32, -16, -8, 16, -8, 0, 26, this.heroTint, 0.9);
+      bodyParts.push(body, head);
+    }
 
     this.nameLabel = scene.add.text(0, 60, hero.name, FONTS.bodySmall);
     this.nameLabel.setOrigin(0.5, 0);
 
-    this.add([this.aura, hpBg, this.hpFill, body, head, this.nameLabel]);
+    this.add([this.aura, hpBg, this.hpFill, ...bodyParts, this.nameLabel]);
     this.setAlpha(1);
     scene.add.existing(this);
 
@@ -86,54 +114,81 @@ export class HeroSprite extends Phaser.GameObjects.Container {
     this.syncToHero(hero);
   }
 
+  private readonly updateMaskPosition = (): void => {
+    if (this.maskGraphics) {
+      this.maskGraphics.setPosition(this.x, this.y + 8);
+    }
+  };
+
   syncToHero(hero: Hero): void {
     const hpRatio = Phaser.Math.Clamp(hero.hp / hero.stats.maxHp, 0, 1);
-    this.updateHpBar(hpRatio);
-
     const defeated = hero.hp <= 0;
-    if (defeated) {
+    const targetX = this.getTargetX(hero);
+
+    if (Math.abs(hpRatio - this.lastHpRatio) > 0.001) {
+      this.updateHpBar(hpRatio);
+      this.lastHpRatio = hpRatio;
+    }
+
+    if (defeated && !this.lastDefeated) {
       this.stopAuras();
       this.trailEmitter.stop();
       if (!this.bobTween.isPaused()) {
         this.bobTween.pause();
       }
-      this.sceneRef.tweens.killTweensOf(this);
+      this.moveTween?.stop();
+      this.moveTween = null;
       this.setPosition(this.baseX, this.baseY);
       this.setAlpha(0.3);
+      this.lastDefeated = true;
+      this.lastStatus = hero.status;
+      this.lastTargetX = this.baseX;
       return;
     }
 
-    this.setAlpha(1);
-
-    if (hero.status === 'idle') {
-      if (this.bobTween.isPaused()) {
-        this.bobTween.resume();
-      }
-      this.trailEmitter.stop();
-      this.configureAura(COLORS.white, 0.08, 1.06, 1400);
-    } else {
-      if (!this.bobTween.isPaused()) {
-        this.bobTween.pause();
-      }
-      this.y = this.baseY;
-
-      if (hero.status === 'exploring') {
-        this.trailEmitter.start();
-        this.configureAura(COLORS.blue, 0.2, 1.18, 1000);
-      } else {
-        this.trailEmitter.stop();
-        this.configureAura(COLORS.gold, 0.24, 1.2, 900);
-      }
+    if (!defeated && this.lastDefeated) {
+      this.setAlpha(1);
+      this.lastDefeated = false;
     }
 
-    const targetX = this.getTargetX(hero);
-    this.sceneRef.tweens.killTweensOf(this);
-    this.sceneRef.tweens.add({
-      targets: this,
-      x: targetX,
-      duration: 250,
-      ease: 'Sine.Out',
-    });
+    if (defeated) return;
+
+    if (hero.status !== this.lastStatus) {
+      this.setAlpha(1);
+
+      if (hero.status === 'idle') {
+        if (this.bobTween.isPaused()) {
+          this.bobTween.resume();
+        }
+        this.trailEmitter.stop();
+        this.configureAura(COLORS.white, 0.08, 1.06, 1400);
+      } else {
+        if (!this.bobTween.isPaused()) {
+          this.bobTween.pause();
+        }
+        this.y = this.baseY;
+
+        if (hero.status === 'exploring') {
+          this.trailEmitter.start();
+          this.configureAura(COLORS.blue, 0.2, 1.18, 1000);
+        } else {
+          this.trailEmitter.stop();
+          this.configureAura(COLORS.gold, 0.24, 1.2, 900);
+        }
+      }
+      this.lastStatus = hero.status;
+    }
+
+    if (Math.abs(targetX - this.lastTargetX) > 1) {
+      this.moveTween?.stop();
+      this.moveTween = this.sceneRef.tweens.add({
+        targets: this,
+        x: targetX,
+        duration: 250,
+        ease: 'Sine.Out',
+      });
+      this.lastTargetX = targetX;
+    }
   }
 
   setBasePosition(baseX: number, baseY: number): void {
@@ -146,9 +201,12 @@ export class HeroSprite extends Phaser.GameObjects.Container {
   }
 
   override destroy(fromScene?: boolean): void {
+    this.sceneRef.events.off(Phaser.Scenes.Events.PRE_UPDATE, this.updateMaskPosition, this);
+    this.maskGraphics?.destroy();
     this.bobTween.stop();
     this.stopAuras();
     this.hpTween?.stop();
+    this.moveTween?.stop();
     this.trailEmitter.destroy();
     super.destroy(fromScene);
   }

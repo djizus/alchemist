@@ -5,9 +5,11 @@ import { hasPendingLoot } from '../game/engine';
 interface Props {
   state: GameState;
   dispatch: (action: GameAction) => void;
+  focusedHeroId: number;
+  onFocusHero: (heroId: number) => void;
 }
 
-export function HeroPanel({ state, dispatch }: Props) {
+export function HeroPanel({ state, dispatch, focusedHeroId, onFocusHero }: Props) {
   const canRecruit = state.heroes.length < MAX_HEROES &&
     state.inventory.gold >= HERO_COSTS[state.heroes.length];
   const nextCost = state.heroes.length < MAX_HEROES ? HERO_COSTS[state.heroes.length] : null;
@@ -22,7 +24,11 @@ export function HeroPanel({ state, dispatch }: Props) {
           const hasLoot = hasPendingLoot(hero);
 
           return (
-            <div key={hero.id} className={`hero-card hero-${hero.status}`}>
+            <div
+              key={hero.id}
+              className={`hero-card hero-${hero.status}${hero.id === focusedHeroId ? ' focused' : ''}`}
+              onClick={() => onFocusHero(hero.id)}
+            >
               <div className="hero-header">
                 <span className="hero-name">{hero.name}</span>
                 <span className="hero-status">

@@ -30,6 +30,7 @@ export function App() {
   const gameRef = useRef<ReturnType<typeof createPhaserGame> | null>(null);
   const prevStateRef = useRef<GameState | null>(null);
   const [activeTab, setActiveTab] = useState<MobileTab>('heroes');
+  const [focusedHeroId, setFocusedHeroId] = useState<number>(0);
 
   useGameLoop(dispatch);
 
@@ -52,6 +53,10 @@ export function App() {
   }, []);
 
   useEffect(() => {
+    bridgeRef.current?.setFocusedHero(focusedHeroId);
+  }, [focusedHeroId]);
+
+  useEffect(() => {
     const bridge = bridgeRef.current;
     if (!bridge) return;
     bridge.updateState(state, prevStateRef.current);
@@ -65,7 +70,7 @@ export function App() {
         <TopBar state={state} onReset={reset} />
 
         <div className="panel-zone panel-zone-left">
-          <HeroPanel state={state} dispatch={dispatch} />
+          <HeroPanel state={state} dispatch={dispatch} focusedHeroId={focusedHeroId} onFocusHero={setFocusedHeroId} />
           <ExplorationPanel state={state} dispatch={dispatch} />
         </div>
 
@@ -81,7 +86,7 @@ export function App() {
 
         <div className="mobile-drawer">
           <div className="mobile-drawer-content">
-            {activeTab === 'heroes' && <HeroPanel state={state} dispatch={dispatch} />}
+            {activeTab === 'heroes' && <HeroPanel state={state} dispatch={dispatch} focusedHeroId={focusedHeroId} onFocusHero={setFocusedHeroId} />}
             {activeTab === 'explore' && <ExplorationPanel state={state} dispatch={dispatch} />}
             {activeTab === 'craft' && <CraftPanel state={state} dispatch={dispatch} />}
             {activeTab === 'grimoire' && <GrimoirePanel state={state} dispatch={dispatch} />}

@@ -81,6 +81,7 @@ export class BootScene extends Phaser.Scene {
 
   private async loadAssets(): Promise<void> {
     await this.queueBackgrounds();
+    await this.queueHeroPortraits();
     await this.queueSfx();
 
     if (this.load.list.size === 0) return;
@@ -105,6 +106,16 @@ export class BootScene extends Phaser.Scene {
       if (await this.urlExists(url)) {
         this.textures.remove(`zone-${zone.id}`);
         this.load.image(`zone-${zone.id}`, url);
+      }
+    }
+  }
+
+  private async queueHeroPortraits(): Promise<void> {
+    const heroNames = ['alaric', 'brynn', 'cassiel'];
+    for (const name of heroNames) {
+      const url = `/assets/heroes/hero-${name}.png`;
+      if (await this.urlExists(url)) {
+        this.load.image(`hero-${name}`, url);
       }
     }
   }

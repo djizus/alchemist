@@ -21,9 +21,20 @@ export class MainScene extends Phaser.Scene {
 
   private heroContainer!: Phaser.GameObjects.Container;
   private heroSprites = new Map<number, HeroSprite>();
+  private focusedHeroId: number | null = null;
+  private lastState: GameState | null = null;
 
   private readonly onStateChange = (state: GameState): void => {
+    this.lastState = state;
     this.syncToState(state);
+  };
+
+  private readonly onFocusedHeroChange = (heroId: number | null): void => {
+    this.focusedHeroId = heroId;
+    if (this.lastState) {
+      const zoneId = this.getZoneForFocusedHero(this.lastState);
+      this.zoneBackground?.setActiveZone(zoneId);
+    }
   };
 
   private readonly onExplorationTick = (payload: ExplorationTickPayload): void => {
@@ -80,17 +91,20 @@ export class MainScene extends Phaser.Scene {
     this.heroContainer = this.add.container(0, 0);
     this.heroContainer.setDepth(12);
 
+    this.focusedHeroId = this.bridge.focusedHeroId;
+
     this.bridge.on('stateChange', this.onStateChange);
     this.bridge.on('explorationTick', this.onExplorationTick);
     this.bridge.on('craftResult', this.onCraftResult);
     this.bridge.on('notification', this.onNotification);
     this.bridge.on('gameOver', this.onGameOver);
+    this.bridge.on('focusedHeroChange', this.onFocusedHeroChange);
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, this.shutdown, this);
   }
 
   private syncToState(state: GameState): void {
-    const zoneId = this.getDeepestExploringZone(state);
+    const zoneId = this.getZoneForFocusedHero(state);
     this.zoneBackground?.setActiveZone(zoneId);
     this.syncHeroes(state.heroes);
   }
@@ -134,19 +148,14 @@ export class MainScene extends Phaser.Scene {
     return sprite;
   }
 
-  private getDeepestExploringZone(state: GameState): number | null {
-    const exploringHeroes = state.heroes.filter((hero) => hero.status === 'exploring');
-    if (exploringHeroes.length === 0) {
-      return null;
-    }
+  private getZoneForFocusedHero(state: GameState): number | null {
+    const heroId = this.focusedHeroId ?? state.heroes[0]?.id ?? null;
+    if (heroId === null) return null;
 
-    let deepestZoneId = 0;
-    for (const hero of exploringHeroes) {
-      const zone = getCurrentZone(hero.depth);
-      deepestZoneId = Math.max(deepestZoneId, zone.id);
-    }
+    const hero = state.heroes.find((h) => h.id === heroId);
+    if (!hero || hero.status !== 'exploring') return null;
 
-    return deepestZoneId;
+    return getCurrentZone(hero.depth).id;
   }
 
   private playExplorationSound(kind: ExplorationTickPayload['event']['kind']): void {
@@ -185,6 +194,7 @@ export class MainScene extends Phaser.Scene {
       this.bridge.off('craftResult', this.onCraftResult);
       this.bridge.off('notification', this.onNotification);
       this.bridge.off('gameOver', this.onGameOver);
+      this.bridge.off('focusedHeroChange', this.onFocusedHeroChange);
     }
 
     for (const sprite of this.heroSprites.values()) {

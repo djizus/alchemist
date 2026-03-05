@@ -410,6 +410,20 @@ body {
   border-color: var(--border-color);
 }
 
+.hero-card.focused {
+  border-color: var(--accent-gold);
+  box-shadow: 0 0 12px rgba(255, 215, 0, 0.3), inset 0 0 8px rgba(255, 215, 0, 0.05);
+  cursor: default;
+}
+
+.hero-card:not(.focused) {
+  cursor: pointer;
+}
+
+.hero-card:not(.focused):hover {
+  border-color: var(--accent-gold-dim, rgba(255, 215, 0, 0.4));
+}
+
 @keyframes exploringPulse {
   0%, 100% { box-shadow: 0 0 8px rgba(64, 128, 208, 0.1); }
   50% { box-shadow: 0 0 16px rgba(64, 128, 208, 0.25); }
