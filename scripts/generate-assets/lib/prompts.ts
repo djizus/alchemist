@@ -30,7 +30,6 @@ export function buildBackgroundPrompt(asset: ImageAssetDef): string {
 export function buildHeroPortraitPrompt(asset: ImageAssetDef): string {
   return [
     `Portrait bust of ${asset.description}.`,
-    `Neo-futurist nature character art. Clean linework with bioluminescent highlights.`,
     `Dramatic lighting from below. Dark background #080810 with subtle organic glow.`,
     `Determined expression. Square composition, centered face filling 80% of frame.`,
     GLOBAL_ART_STYLE,
@@ -42,9 +41,8 @@ export function buildIngredientIconPrompt(asset: ImageAssetDef): string {
   const desc = asset.description.replace(/^(A|An)\s+/i, '');
   return [
     `A single ${desc}.`,
-    `Centered on dark background #0a0a14. Neo-futurist nature item icon.`,
-    `Clean vector-like linework with bioluminescent ${asset.zoneColor ?? '#ffffff'} accent glow.`,
-    `Organic textures with sleek geometric detail. Flat 2D.`,
+    `Centered on dark background #0a0a14. Bioluminescent ${asset.zoneColor ?? '#ffffff'} accent glow.`,
+    GLOBAL_ART_STYLE,
     `Clean, instantly readable at small sizes. Square composition.`,
     `Single item only, no multiples. No text, no people, no UI.`,
   ].join(' ');
@@ -53,9 +51,8 @@ export function buildIngredientIconPrompt(asset: ImageAssetDef): string {
 export function buildPotionIconPrompt(asset: ImageAssetDef): string {
   return [
     `${asset.description}.`,
-    `Centered on dark background #0a0a14. Neo-futurist nature item icon.`,
-    `Clean vector-like linework, organic glass shapes with bioluminescent liquid glow.`,
-    `Flat 2D with layered depth. Sleek and elegant.`,
+    `Centered on dark background #0a0a14. Organic glass shapes with bioluminescent liquid glow.`,
+    GLOBAL_ART_STYLE,
     `Clean, instantly readable at small sizes. Square composition.`,
     `Single item only. No text, no people, no UI.`,
   ].join(' ');

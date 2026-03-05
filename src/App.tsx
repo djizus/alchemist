@@ -1,8 +1,4 @@
-// ═══════════════════════════════════════════════
-// App — Root component, wires state → UI
-// ═══════════════════════════════════════════════
-
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { GameState } from './game/state';
 import { useGameState } from './hooks/useGameState';
 import { useGameLoop } from './hooks/useGameLoop';
@@ -18,11 +14,22 @@ import { EventLog } from './ui/EventLog';
 import { Notifications } from './ui/Notifications';
 import { WinOverlay } from './ui/WinOverlay';
 
+type MobileTab = 'heroes' | 'explore' | 'craft' | 'grimoire' | 'inventory';
+
+const MOBILE_TABS: { key: MobileTab; label: string; icon: string }[] = [
+  { key: 'heroes', label: 'Heroes', icon: '⚔' },
+  { key: 'explore', label: 'Explore', icon: '🗺' },
+  { key: 'craft', label: 'Craft', icon: '⚗' },
+  { key: 'grimoire', label: 'Grimoire', icon: '📖' },
+  { key: 'inventory', label: 'Inventory', icon: '🎒' },
+];
+
 export function App() {
   const { state, dispatch, reset } = useGameState();
   const bridgeRef = useRef<PhaserBridge | null>(null);
   const gameRef = useRef<ReturnType<typeof createPhaserGame> | null>(null);
   const prevStateRef = useRef<GameState | null>(null);
+  const [activeTab, setActiveTab] = useState<MobileTab>('heroes');
 
   useGameLoop(dispatch);
 
@@ -46,10 +53,7 @@ export function App() {
 
   useEffect(() => {
     const bridge = bridgeRef.current;
-    if (!bridge) {
-      return;
-    }
-
+    if (!bridge) return;
     bridge.updateState(state, prevStateRef.current);
     prevStateRef.current = state;
   }, [state]);
@@ -60,19 +64,43 @@ export function App() {
       <div className="app">
         <TopBar state={state} onReset={reset} />
 
-        <div className="main-layout">
-          <div className="column column-left">
-            <HeroPanel state={state} dispatch={dispatch} />
-            <ExplorationPanel state={state} dispatch={dispatch} />
-            <EventLog state={state} />
-          </div>
+        <div className="panel-zone panel-zone-left">
+          <HeroPanel state={state} dispatch={dispatch} />
+          <ExplorationPanel state={state} dispatch={dispatch} />
+        </div>
 
-          <div className="column column-right">
-            <CraftPanel state={state} dispatch={dispatch} />
-            <InventoryPanel state={state} dispatch={dispatch} />
-            <GrimoirePanel state={state} dispatch={dispatch} />
+        <div className="panel-zone panel-zone-right">
+          <CraftPanel state={state} dispatch={dispatch} />
+          <InventoryPanel state={state} dispatch={dispatch} />
+          <GrimoirePanel state={state} dispatch={dispatch} />
+        </div>
+
+        <div className="panel-zone panel-zone-bottom">
+          <EventLog state={state} />
+        </div>
+
+        <div className="mobile-drawer">
+          <div className="mobile-drawer-content">
+            {activeTab === 'heroes' && <HeroPanel state={state} dispatch={dispatch} />}
+            {activeTab === 'explore' && <ExplorationPanel state={state} dispatch={dispatch} />}
+            {activeTab === 'craft' && <CraftPanel state={state} dispatch={dispatch} />}
+            {activeTab === 'grimoire' && <GrimoirePanel state={state} dispatch={dispatch} />}
+            {activeTab === 'inventory' && <InventoryPanel state={state} dispatch={dispatch} />}
           </div>
         </div>
+
+        <nav className="mobile-tab-bar">
+          {MOBILE_TABS.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              className={`mobile-tab${activeTab === key ? ' active' : ''}`}
+              onClick={() => setActiveTab(key)}
+            >
+              <span className="mobile-tab-icon">{icon}</span>
+              <span className="mobile-tab-label">{label}</span>
+            </button>
+          ))}
+        </nav>
 
         <Notifications state={state} dispatch={dispatch} />
         {state.gameOver && <WinOverlay state={state} onReset={reset} />}
