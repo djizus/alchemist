@@ -1,6 +1,7 @@
 import type { GameState, GameAction } from '../game/state';
 import { HERO_COSTS, MAX_HEROES } from '../game/constants';
 import { hasPendingLoot } from '../game/engine';
+import { ingredientIconUrl } from './assetUrl';
 
 interface Props {
   state: GameState;
@@ -77,7 +78,10 @@ export function HeroPanel({ state, dispatch, focusedHeroId, onFocusHero }: Props
                     <span className="loot-gold">◆ {hero.pendingLoot.gold}g</span>
                   )}
                   {Object.entries(hero.pendingLoot.ingredients).map(([name, qty]) => (
-                    <span key={name} className="loot-ingredient">{qty}x {name}</span>
+                    <span key={name} className="loot-ingredient">
+                      <img className="item-icon-sm" src={ingredientIconUrl(name)} alt="" />
+                      {qty}x {name}
+                    </span>
                   ))}
                 </div>
               )}

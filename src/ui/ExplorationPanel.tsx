@@ -1,6 +1,7 @@
 import type { GameState, GameAction } from '../game/state';
 import { getCurrentZone } from '../game/engine';
 import { ZONES } from '../game/constants';
+import { ingredientIconUrl } from './assetUrl';
 
 interface Props {
   state: GameState;
@@ -92,7 +93,10 @@ export function ExplorationPanel({ state, dispatch: _dispatch }: Props) {
                 <span className="loot-gold">+{hero.pendingLoot.gold}g</span>
               )}
               {Object.entries(hero.pendingLoot.ingredients).map(([name, qty]) => (
-                <span key={name} className="loot-ingredient">{qty}x {name}</span>
+                <span key={name} className="loot-ingredient">
+                  <img className="item-icon-sm" src={ingredientIconUrl(name)} alt="" />
+                  {qty}x {name}
+                </span>
               ))}
             </div>
 

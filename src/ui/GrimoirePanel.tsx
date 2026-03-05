@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import type { GameState, GameAction, Recipe } from '../game/state';
 import { TOTAL_POTIONS, HINT_BASE_COST, HINT_COST_MULTIPLIER, ingredientColor } from '../game/constants';
+import { ingredientIconUrl, potionIconUrl, soupIconUrl } from './assetUrl';
 
 type EffectFilter = 'all' | 'max_hp' | 'power' | 'regen_speed';
 
@@ -88,11 +89,14 @@ export function GrimoirePanel({ state, dispatch }: Props) {
               onClick={() => handleRecipeClick(recipe.ingredients)}
               title={brewCount > 0 ? 'Ingredients available — click to auto-fill' : 'Click to auto-fill craft slots'}
             >
+              <img className="item-icon item-icon-lg" src={potionIconUrl(recipe.effect.type)} alt="" />
               <div className="recipe-info">
                 <span className="recipe-name">{recipe.name}</span>
                 <span className="recipe-ingredients">
+                  <img className="item-icon-sm" src={ingredientIconUrl(recipe.ingredients[0])} alt="" />
                   <span style={{ color: ingredientColor(recipe.ingredients[0]) }}>{recipe.ingredients[0]}</span>
                   {' + '}
+                  <img className="item-icon-sm" src={ingredientIconUrl(recipe.ingredients[1])} alt="" />
                   <span style={{ color: ingredientColor(recipe.ingredients[1]) }}>{recipe.ingredients[1]}</span>
                 </span>
                 <span className="recipe-effect">
@@ -119,6 +123,7 @@ export function GrimoirePanel({ state, dispatch }: Props) {
         {filter === 'all' && hinted.map(recipe => (
           <div key={recipe.id} className="grimoire-entry hinted">
             <span className="recipe-ingredients">
+              <img className="item-icon-sm" src={ingredientIconUrl(recipe.ingredients[0])} alt="" />
               <span style={{ color: ingredientColor(recipe.ingredients[0]) }}>{recipe.ingredients[0]}</span>
               {' + ???'}
             </span>
@@ -158,9 +163,12 @@ export function GrimoirePanel({ state, dispatch }: Props) {
                 onClick={() => handleRecipeClick([a, b])}
                 title="Click to retry"
               >
+                <img className="item-icon-sm" src={soupIconUrl()} alt="" />
                 <span className="recipe-ingredients">
+                  <img className="item-icon-sm" src={ingredientIconUrl(a)} alt="" />
                   <span style={{ color: ingredientColor(a) }}>{a}</span>
                   {' + '}
+                  <img className="item-icon-sm" src={ingredientIconUrl(b)} alt="" />
                   <span style={{ color: ingredientColor(b) }}>{b}</span>
                 </span>
                 <span className="failed-result">→ Soup</span>

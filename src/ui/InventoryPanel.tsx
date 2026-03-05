@@ -1,5 +1,6 @@
 import type { GameState, GameAction } from '../game/state';
 import { ingredientColor } from '../game/constants';
+import { ingredientIconUrl, potionIconUrl } from './assetUrl';
 
 interface Props {
   state: GameState;
@@ -23,6 +24,7 @@ export function InventoryPanel({ state, dispatch }: Props) {
           <div className="potion-list">
             {potions.map((potion, index) => (
               <div key={index} className="potion-item">
+                <img className="item-icon" src={potionIconUrl(potion.effect.type)} alt="" />
                 <div className="potion-info">
                   <span className="potion-name">{potion.name}</span>
                   <span className="potion-effect">
@@ -58,6 +60,7 @@ export function InventoryPanel({ state, dispatch }: Props) {
           <div className="ingredient-list">
             {ingredients.map(([name, qty]) => (
               <div key={name} className="ingredient-item">
+                <img className="item-icon" src={ingredientIconUrl(name)} alt="" />
                 <span className="ingredient-name" style={{ color: ingredientColor(name) }}>{name}</span>
                 <span className="ingredient-qty">x{qty}</span>
               </div>

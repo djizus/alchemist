@@ -1052,6 +1052,40 @@ body {
   gap: 3px;
 }
 
+.item-icon {
+  width: 28px;
+  height: 28px;
+  object-fit: contain;
+  flex-shrink: 0;
+  image-rendering: auto;
+}
+
+.item-icon-lg {
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+
+.item-icon-sm {
+  width: 16px;
+  height: 16px;
+  object-fit: contain;
+  vertical-align: middle;
+  margin-right: 2px;
+}
+
+.craft-select-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.craft-select-row .craft-select {
+  flex: 1;
+  min-width: 0;
+}
+
 .potion-item {
   display: flex;
   justify-content: space-between;
@@ -1103,7 +1137,8 @@ body {
 
 .ingredient-item {
   display: flex;
-  justify-content: space-between;
+  align-items: center;
+  gap: 4px;
   padding: 3px 6px;
   font-size: 0.7rem;
   background: rgba(26, 29, 56, 0.4);
@@ -1122,13 +1157,15 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
 }
 
 .ingredient-qty {
   color: var(--text-secondary);
   font-weight: 600;
   flex-shrink: 0;
-  margin-left: 4px;
+  margin-left: auto;
 }
 
 /* ─── Event Log ─── */
@@ -1402,6 +1439,9 @@ body {
   font-size: 0.75rem;
   font-style: italic;
   color: var(--text-secondary);
+  display: flex;
+  align-items: center;
+  gap: 4px;
 }
 
 /* ─── Buy Hint Button ─── */

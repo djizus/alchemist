@@ -2,6 +2,7 @@ import type { GameState, GameAction } from '../game/state';
 import { ALL_INGREDIENTS, ingredientColor } from '../game/constants';
 import { findRecipe } from '../game/recipes';
 import { isFailedCombo } from '../game/engine';
+import { ingredientIconUrl } from './assetUrl';
 
 interface Props {
   state: GameState;
@@ -32,21 +33,24 @@ export function CraftPanel({ state, dispatch }: Props) {
       <h2 className="panel-title">Crafting</h2>
       <div className="craft-slot">
         <label className="craft-slot-label">Ingredient</label>
-        <select
-          className="craft-select"
-          value={selected ?? ''}
-          onChange={e => dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: e.target.value || null })}
-        >
-          <option value="">— Select —</option>
-          {available.map(name => {
-            const untried = countUntriedCombos(state, name);
-            return (
-              <option key={name} value={name} style={{ color: ingredientColor(name) }}>
-                {name} ({inv[name] ?? 0}) {untried > 0 ? `· ${untried} untried` : ''}
-              </option>
-            );
-          })}
-        </select>
+        <div className="craft-select-row">
+          {selected && <img className="item-icon" src={ingredientIconUrl(selected)} alt="" />}
+          <select
+            className="craft-select"
+            value={selected ?? ''}
+            onChange={e => dispatch({ type: 'SET_CRAFT_SLOT', slotIndex: 0, ingredientName: e.target.value || null })}
+          >
+            <option value="">— Select —</option>
+            {available.map(name => {
+              const untried = countUntriedCombos(state, name);
+              return (
+                <option key={name} value={name} style={{ color: ingredientColor(name) }}>
+                  {name} ({inv[name] ?? 0}) {untried > 0 ? `· ${untried} untried` : ''}
+                </option>
+              );
+            })}
+          </select>
+        </div>
       </div>
       <button
         className="btn btn-craft"
